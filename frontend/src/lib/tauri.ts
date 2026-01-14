@@ -1,12 +1,20 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-const getTauriInternals = () =>
-  typeof window !== 'undefined'
-    ? (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
-    : undefined;
+const getTauriGlobal = () => {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
 
-const isTauriAvailable = () => getTauriInternals() !== undefined;
+  const tauriWindow = window as Window & {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
+  };
+
+  return tauriWindow.__TAURI__ ?? tauriWindow.__TAURI_INTERNALS__;
+};
+
+const isTauriAvailable = () => getTauriGlobal() !== undefined;
 
 export const safeInvoke = async <T>(
   command: string,

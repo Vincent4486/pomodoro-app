@@ -118,14 +118,14 @@ impl StatusBarController {
         if let Some(button) = unsafe { self.status_item.button() } {
             let font: Id<NSFont> = unsafe {
                 let font: *mut NSFont = msg_send![class!(NSFont), monospacedDigitSystemFontOfSize: 0.0 weight: 0.0];
-                Id::from_retained_ptr(font)
+                Id::retain_autoreleased(font).expect("NSFont retained")
             };
             let ns_title = NSString::from_str(title);
             let attributes = NSDictionary::from_keys_and_objects(
                 &[NSString::from_str("NSFontAttributeName")],
                 &[font],
             );
-            let attributed =
+            let attributed: Id<NSAttributedString> =
                 NSAttributedString::alloc().init_with_string_attributes(&ns_title, &attributes);
             unsafe {
                 button.set_attributed_title(&attributed);
@@ -477,7 +477,7 @@ fn create_handler() -> Id<Object> {
         decl.add_method(sel!(noop:), noop as extern "C" fn(&Object, Sel, *mut Object));
         decl.register()
     });
-    unsafe { Id::from_retained_ptr(msg_send![class, new]) }
+    unsafe { Id::from_raw(msg_send![*class, new]).expect("PomodoroStatusHandler instance") }
 }
 
 #[cfg(target_os = "macos")]

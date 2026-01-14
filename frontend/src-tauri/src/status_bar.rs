@@ -1,4 +1,4 @@
-#[cfg(all(target_os = "macos", feature = "status-bar"))]
+#[cfg(target_os = "macos")]
 mod macos {
 #[cfg(target_os = "macos")]
 use std::sync::{Arc, Mutex};
@@ -118,14 +118,14 @@ impl StatusBarController {
         if let Some(button) = unsafe { self.status_item.button() } {
             let font: Id<NSFont> = unsafe {
                 let font: *mut NSFont = msg_send![class!(NSFont), monospacedDigitSystemFontOfSize: 0.0 weight: 0.0];
-                Id::from_retained_ptr(font)
+                Id::retain_autoreleased(font).expect("NSFont retained")
             };
             let ns_title = NSString::from_str(title);
             let attributes = NSDictionary::from_keys_and_objects(
                 &[NSString::from_str("NSFontAttributeName")],
                 &[font],
             );
-            let attributed =
+            let attributed: Id<NSAttributedString> =
                 NSAttributedString::alloc().init_with_string_attributes(&ns_title, &attributes);
             unsafe {
                 button.set_attributed_title(&attributed);
@@ -477,7 +477,7 @@ fn create_handler() -> Id<Object> {
         decl.add_method(sel!(noop:), noop as extern "C" fn(&Object, Sel, *mut Object));
         decl.register()
     });
-    unsafe { Id::from_retained_ptr(msg_send![class, new]) }
+    unsafe { Id::from_raw(msg_send![*class, new]).expect("PomodoroStatusHandler instance") }
 }
 
 #[cfg(target_os = "macos")]
@@ -618,18 +618,18 @@ fn handle_focus_sound(sound: FocusSound) {
 }
 }
 
-#[cfg(all(target_os = "macos", feature = "status-bar"))]
+#[cfg(target_os = "macos")]
 pub use macos::{init, update_status_bar};
 
-#[cfg(not(all(target_os = "macos", feature = "status-bar")))]
+#[cfg(not(target_os = "macos"))]
 use std::sync::Arc;
-#[cfg(not(all(target_os = "macos", feature = "status-bar")))]
+#[cfg(not(target_os = "macos"))]
 use tauri::AppHandle;
-#[cfg(not(all(target_os = "macos", feature = "status-bar")))]
+#[cfg(not(target_os = "macos"))]
 use crate::timer::{TimerEngine, TimerSnapshot};
 
-#[cfg(not(all(target_os = "macos", feature = "status-bar")))]
+#[cfg(not(target_os = "macos"))]
 pub fn init(_app: AppHandle, _engine: Arc<TimerEngine>) {}
 
-#[cfg(not(all(target_os = "macos", feature = "status-bar")))]
+#[cfg(not(target_os = "macos"))]
 pub fn update_status_bar(_app: &AppHandle, _snapshot: &TimerSnapshot) {}

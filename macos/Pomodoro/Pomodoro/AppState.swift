@@ -5,7 +5,6 @@
 //  Created by Zhengyang Hu on 1/15/26.
 //
 
-import AppKit
 import Combine
 import SwiftUI
 
@@ -13,9 +12,6 @@ final class AppState: ObservableObject {
     let pomodoro: PomodoroTimerEngine
     let countdown: CountdownTimerEngine
 
-    var openWindowHandler: (() -> Void)?
-
-    private let menuBarController: MenuBarController
     private var cancellables: Set<AnyCancellable> = []
 
     init(
@@ -37,7 +33,6 @@ final class AppState: ObservableObject {
             }
             .store(in: &cancellables)
 
-        menuBarController = MenuBarController(appState: self)
     }
 
     func startPomodoro() {
@@ -80,23 +75,4 @@ final class AppState: ObservableObject {
         countdown.reset()
     }
 
-    func openMainWindow() {
-        if let openWindowHandler {
-            openWindowHandler()
-            return
-        }
-
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        if let window = NSApplication.shared.windows.first {
-            window.makeKeyAndOrderFront(nil)
-        }
-    }
-
-    func quitApp() {
-        NSApplication.shared.terminate(nil)
-    }
-
-    func shutdown() {
-        menuBarController.shutdown()
-    }
 }

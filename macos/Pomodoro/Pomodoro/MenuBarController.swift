@@ -19,11 +19,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private unowned let appState: AppState
     private let statusItem: NSStatusItem
     private let menu: NSMenu
+    private let openMainWindow: () -> Void
+    private let quitHandler: () -> Void
     private var titleTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
 
-    init(appState: AppState) {
+    init(appState: AppState, openMainWindow: @escaping () -> Void, quitApp: @escaping () -> Void) {
         self.appState = appState
+        self.openMainWindow = openMainWindow
+        self.quitHandler = quitApp
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu = NSMenu()
         menu.autoenablesItems = false
@@ -225,11 +229,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openApp() {
-        appState.openMainWindow()
+        openMainWindow()
     }
 
     @objc private func quitApp() {
-        appState.quitApp()
+        quitHandler()
     }
 
     func menuWillOpen(_ menu: NSMenu) {

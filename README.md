@@ -7,8 +7,8 @@ The 0.5.x branch introduces a new glass-panel layout system with separate tiles 
 <img width="320" height="320" alt="Firefly_Gemini Flash_Make it in to normal white background 328819" src="https://github.com/user-attachments/assets/629e345e-5540-4439-8e47-30f3db8c6cad" />
 
 > ⚠️ **Notice**  
-> A local app launch issue is currently being fixed.  
-> **Estimated fix: Jan 13–15.**
+> Migration to native Swift in progress 🏗️ <br>
+> The app will not work during the migration process ❌
 
 ## Version status
 

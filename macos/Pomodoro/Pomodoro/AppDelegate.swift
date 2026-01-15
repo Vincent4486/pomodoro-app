@@ -10,10 +10,14 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var mainWindow: NSWindow?
+    private var appStateConfigured = false
 
     var appState: AppState? {
         didSet {
-            appState?.openWindowHandler = { [weak self] in
+            guard !appStateConfigured else { return }
+            guard let appState else { return }
+            appStateConfigured = true
+            appState.openWindowHandler = { [weak self] in
                 self?.openMainWindow()
             }
         }

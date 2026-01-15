@@ -11,15 +11,22 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var mainWindow: NSWindow?
     private var appStateConfigured = false
+    private var menuBarController: MenuBarController?
 
     var appState: AppState? {
         didSet {
             guard !appStateConfigured else { return }
             guard let appState else { return }
             appStateConfigured = true
-            appState.openWindowHandler = { [weak self] in
-                self?.openMainWindow()
-            }
+            menuBarController = MenuBarController(
+                appState: appState,
+                openMainWindow: { [weak self] in
+                    self?.openMainWindow()
+                },
+                quitApp: { [weak self] in
+                    self?.quitApp()
+                }
+            )
         }
     }
 
@@ -28,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        appState?.shutdown()
+        menuBarController?.shutdown()
     }
 
     func openMainWindow() {
@@ -54,6 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         focus(window: window)
         mainWindow = window
+    }
+
+    private func quitApp() {
+        NSApplication.shared.terminate(nil)
     }
 
     private func existingWindow() -> NSWindow? {

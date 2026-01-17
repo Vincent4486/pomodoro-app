@@ -14,23 +14,35 @@ final class AppState: ObservableObject {
 
     @Published var durationConfig: DurationConfig {
         didSet { updatePomodoroConfiguration() }
+        didSet {
+            updatePomodoroConfiguration()
+            durationConfig.save(to: userDefaults)
+        }
     }
+
+    @Published var presetSelection: PresetSelection
 
     @Published private(set) var pomodoroMode: PomodoroTimerEngine.Mode
     @Published private(set) var pomodoroCurrentMode: PomodoroTimerEngine.CurrentMode
 
     private var cancellables: Set<AnyCancellable> = []
+    private let userDefaults: UserDefaults
 
+    // Designated initializer - no default arguments to avoid linker symbol issues
     init(
         pomodoro: PomodoroTimerEngine,
         countdown: CountdownTimerEngine,
         durationConfig: DurationConfig
+        durationConfig: DurationConfig,
+        userDefaults: UserDefaults
     ) {
         self.pomodoro = pomodoro
         self.countdown = countdown
         self.durationConfig = durationConfig
+        self.presetSelection = PresetSelection.selection(for: durationConfig)
         self.pomodoroMode = pomodoro.mode
         self.pomodoroCurrentMode = pomodoro.currentMode
+        self.userDefaults = userDefaults
 
         pomodoro.objectWillChange
             .sink { [weak self] _ in
@@ -61,25 +73,66 @@ final class AppState: ObservableObject {
         updatePomodoroConfiguration()
     }
 
+    // Convenience initializer with explicit UserDefaults forwarding
     convenience init(
-        pomodoro: PomodoroTimerEngine = PomodoroTimerEngine(),
-        countdown: CountdownTimerEngine = CountdownTimerEngine()
+        pomodoro: PomodoroTimerEngine,
+        countdown: CountdownTimerEngine,
+        userDefaults: UserDefaults
     ) {
+        let storedConfig = DurationConfig.load(from: userDefaults)
         self.init(
             pomodoro: pomodoro,
             countdown: countdown,
             durationConfig: .standard
+            durationConfig: storedConfig,
+            userDefaults: userDefaults
         )
     }
 
+    // Convenience initializer with explicit standard UserDefaults
+    convenience init(
+        pomodoro: PomodoroTimerEngine,
+        countdown: CountdownTimerEngine
+    ) {
+        self.init(
+            pomodoro: pomodoro,
+            countdown: countdown,
+            userDefaults: .standard
+        )
+    }
+
+    // Parameterless convenience initializer with explicit defaults
     convenience init() {
-        self.init(pomodoro: PomodoroTimerEngine(), countdown: CountdownTimerEngine())
+        self.init(
+            pomodoro: PomodoroTimerEngine(),
+            countdown: CountdownTimerEngine()
+        )
     }
 
     private func updatePomodoroConfiguration() {
         pomodoro.updateConfiguration(
             durationConfig: durationConfig
         )
+        countdown.updateConfiguration(durationConfig: durationConfig)
+    }
+
+    func applyPresetSelection(_ selection: PresetSelection) {
+        switch selection {
+        case .preset(let preset):
+            selectPreset(preset)
+        case .custom:
+            presetSelection = .custom
+        }
+    }
+
+    func selectPreset(_ preset: Preset) {
+        presetSelection = .preset(preset)
+        durationConfig = preset.durationConfig
+    }
+
+    func applyCustomDurationConfig(_ config: DurationConfig) {
+        presetSelection = .custom
+        durationConfig = config
     }
 
     func startPomodoro() {

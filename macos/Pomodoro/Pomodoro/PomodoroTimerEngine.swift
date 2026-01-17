@@ -178,6 +178,9 @@ final class PomodoroTimerEngine: ObservableObject {
 
     private func isLongBreakDue() -> Bool {
         completedWorkSessions >= durationConfig.longBreakInterval
+        // Choose a long break on exact interval boundaries without resetting the counter.
+        completedWorkSessions > 0
+            && completedWorkSessions % durationConfig.longBreakInterval == 0
     }
 
     private func updateCurrentMode() {

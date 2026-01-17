@@ -21,6 +21,20 @@ struct MainWindowView: View {
                     .font(.subheadline)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Preset")
+                    .font(.headline)
+                Picker("Preset", selection: presetSelectionBinding) {
+                    ForEach(Preset.builtIn) { preset in
+                        Text(preset.name)
+                            .tag(PresetSelection.preset(preset))
+                    }
+                    Text("Custom")
+                        .tag(PresetSelection.custom)
+                }
+                .pickerStyle(.segmented)
+            }
+
             HStack(spacing: 12) {
                 Button("Start") {
                     appState.pomodoro.start()
@@ -41,6 +55,20 @@ struct MainWindowView: View {
                     appState.pomodoro.skipBreak()
                 }
                 .disabled(!pomodoroActions(for: appState.pomodoro.state).canSkipBreak)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Durations")
+                    .font(.headline)
+                Stepper(value: workMinutesBinding, in: 1...120, step: 1) {
+                    Text("Work: \(workMinutesValue) min")
+                }
+                Stepper(value: shortBreakMinutesBinding, in: 1...60, step: 1) {
+                    Text("Short Break: \(shortBreakMinutesValue) min")
+                }
+                Stepper(value: longBreakMinutesBinding, in: 1...90, step: 1) {
+                    Text("Long Break: \(longBreakMinutesValue) min")
+                }
             }
 
             Divider()
@@ -173,6 +201,64 @@ struct MainWindowView: View {
         case .breakRunning, .breakPaused:
             return CountdownActionAvailability(canStart: false, canPause: false, canResume: false)
         }
+    }
+
+    private var workMinutesValue: Int {
+        max(1, appState.durationConfig.workDuration / 60)
+    }
+
+    private var shortBreakMinutesValue: Int {
+        max(1, appState.durationConfig.shortBreakDuration / 60)
+    }
+
+    private var longBreakMinutesValue: Int {
+        max(1, appState.durationConfig.longBreakDuration / 60)
+    }
+
+    private var workMinutesBinding: Binding<Int> {
+        Binding(
+            get: { workMinutesValue },
+            set: { updateDurationConfig(workMinutes: $0) }
+        )
+    }
+
+    private var shortBreakMinutesBinding: Binding<Int> {
+        Binding(
+            get: { shortBreakMinutesValue },
+            set: { updateDurationConfig(shortBreakMinutes: $0) }
+        )
+    }
+
+    private var longBreakMinutesBinding: Binding<Int> {
+        Binding(
+            get: { longBreakMinutesValue },
+            set: { updateDurationConfig(longBreakMinutes: $0) }
+        )
+    }
+
+    private func updateDurationConfig(
+        workMinutes: Int? = nil,
+        shortBreakMinutes: Int? = nil,
+        longBreakMinutes: Int? = nil
+    ) {
+        let currentConfig = appState.durationConfig
+        let updatedWorkMinutes = max(1, workMinutes ?? currentConfig.workDuration / 60)
+        let updatedShortBreakMinutes = max(1, shortBreakMinutes ?? currentConfig.shortBreakDuration / 60)
+        let updatedLongBreakMinutes = max(1, longBreakMinutes ?? currentConfig.longBreakDuration / 60)
+
+        appState.applyCustomDurationConfig(DurationConfig(
+            workDuration: updatedWorkMinutes * 60,
+            shortBreakDuration: updatedShortBreakMinutes * 60,
+            longBreakDuration: updatedLongBreakMinutes * 60,
+            longBreakInterval: currentConfig.longBreakInterval
+        ))
+    }
+
+    private var presetSelectionBinding: Binding<PresetSelection> {
+        Binding(
+            get: { appState.presetSelection },
+            set: { appState.applyPresetSelection($0) }
+        )
     }
 }
 

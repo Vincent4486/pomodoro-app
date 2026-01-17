@@ -103,6 +103,9 @@ final class PomodoroTimerEngine: ObservableObject {
         stopTimer()
         state = .idle
         remainingSeconds = durationConfig.workDuration
+        if mode == .longBreak {
+            completedWorkSessions = 0
+        }
         mode = .work
         updateCurrentMode()
     }
@@ -150,6 +153,9 @@ final class PomodoroTimerEngine: ObservableObject {
             stopTimer()
             state = .idle
             remainingSeconds = durationConfig.workDuration
+            if mode == .longBreak {
+                completedWorkSessions = 0
+            }
             mode = .work
             updateCurrentMode()
         case .running, .paused:
@@ -164,10 +170,14 @@ final class PomodoroTimerEngine: ObservableObject {
         state = .breakRunning
         mode = isLongBreak ? .longBreak : .breakTime
         remainingSeconds = isLongBreak ? durationConfig.longBreakDuration : durationConfig.shortBreakDuration
+        if isLongBreak {
+            completedWorkSessions = 0
+        }
         updateCurrentMode()
     }
 
     private func isLongBreakDue() -> Bool {
+        completedWorkSessions >= durationConfig.longBreakInterval
         // Choose a long break on exact interval boundaries without resetting the counter.
         completedWorkSessions > 0
             && completedWorkSessions % durationConfig.longBreakInterval == 0

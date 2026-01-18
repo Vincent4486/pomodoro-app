@@ -5,7 +5,6 @@
 //  Created by Zhengyang Hu on 1/15/26.
 //
 
-import AVFoundation
 import Combine
 import MediaPlayer
 import SwiftUI
@@ -41,23 +40,8 @@ enum FocusSoundType: String, CaseIterable, Identifiable {
             return "Brown"
         case .rain:
             return "Rain"
-        case .wind:
+    case .wind:
             return "Wind"
-        }
-    }
-
-    var resourceName: String? {
-        switch self {
-        case .off:
-            return nil
-        case .white:
-            return "white"
-        case .brown:
-            return "brown"
-        case .rain:
-            return "rain"
-        case .wind:
-            return "wind"
         }
     }
 }
@@ -69,14 +53,16 @@ final class MusicController: ObservableObject {
 
     private let systemMediaController: SystemMediaController
     private let userDefaults: UserDefaults
-    private var focusPlayer: AVAudioPlayer?
+    private let ambientNoiseEngine: AmbientNoiseEngine
 
     init(
         systemMediaController: SystemMediaController = SystemMediaController(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        ambientNoiseEngine: AmbientNoiseEngine
     ) {
         self.systemMediaController = systemMediaController
         self.userDefaults = userDefaults
+        self.ambientNoiseEngine = ambientNoiseEngine
         let storedFocus = FocusSoundType(rawValue: userDefaults.string(forKey: "music.focusSound") ?? "") ?? .off
         let storedPlayback = MusicPlaybackState(rawValue: userDefaults.string(forKey: "music.playbackState") ?? "") ?? .idle
         currentFocusSound = storedFocus
@@ -140,19 +126,11 @@ final class MusicController: ObservableObject {
             stopFocusSound()
             return
         }
-        stopFocusSoundPlayback(keepSelection: false)
         pauseSystemIfNeeded()
         currentFocusSound = type
-        if let player = makeFocusPlayer(for: type) {
-            focusPlayer = player
-            player.numberOfLoops = -1
-            player.play()
-            playbackState = .playing
-            activeSource = .focusSound
-        } else {
-            playbackState = .idle
-            activeSource = .none
-        }
+        ambientNoiseEngine.play(type: type.ambientNoiseType)
+        playbackState = .playing
+        activeSource = .focusSound
         persistState()
     }
 
@@ -165,28 +143,12 @@ final class MusicController: ObservableObject {
     }
 
     private func stopFocusSoundPlayback(keepSelection: Bool) {
-        focusPlayer?.stop()
-        focusPlayer = nil
+        ambientNoiseEngine.stop()
         if !keepSelection {
             currentFocusSound = .off
         }
         if activeSource == .focusSound {
             activeSource = keepSelection ? .focusSound : .none
-        }
-    }
-
-    private func makeFocusPlayer(for type: FocusSoundType) -> AVAudioPlayer? {
-        guard let resourceName = type.resourceName,
-              let url = Bundle.main.url(forResource: resourceName, withExtension: "wav") else {
-            return nil
-        }
-
-        do {
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.prepareToPlay()
-            return player
-        } catch {
-            return nil
         }
     }
 
@@ -209,6 +171,23 @@ final class MusicController: ObservableObject {
             return .paused
         default:
             return .idle
+        }
+    }
+}
+
+private extension FocusSoundType {
+    var ambientNoiseType: AmbientNoiseEngine.NoiseType {
+        switch self {
+        case .off:
+            return .off
+        case .white:
+            return .white
+        case .brown:
+            return .brown
+        case .rain:
+            return .rain
+        case .wind:
+            return .wind
         }
     }
 }

@@ -10,8 +10,14 @@ import SwiftUI
 @main
 struct PomodoroApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var appState = AppState()
-    @StateObject private var musicController = MusicController()
+    @StateObject private var appState: AppState
+    @StateObject private var musicController: MusicController
+
+    init() {
+        let appState = AppState()
+        _appState = StateObject(wrappedValue: appState)
+        _musicController = StateObject(wrappedValue: MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
+    }
 
     var body: some Scene {
         WindowGroup {

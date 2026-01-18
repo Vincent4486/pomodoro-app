@@ -503,6 +503,8 @@ struct MainWindowView: View {
 }
 
 #Preview {
+    let appState = AppState()
     MainWindowView()
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
 }

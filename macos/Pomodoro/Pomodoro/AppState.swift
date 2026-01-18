@@ -12,6 +12,7 @@ import UserNotifications
 final class AppState: ObservableObject {
     let pomodoro: PomodoroTimerEngine
     let countdown: CountdownTimerEngine
+    let ambientNoiseEngine: AmbientNoiseEngine
 
     @Published var durationConfig: DurationConfig {
         didSet {
@@ -56,10 +57,12 @@ final class AppState: ObservableObject {
         pomodoro: PomodoroTimerEngine,
         countdown: CountdownTimerEngine,
         durationConfig: DurationConfig,
-        userDefaults: UserDefaults
+        userDefaults: UserDefaults,
+        ambientNoiseEngine: AmbientNoiseEngine
     ) {
         self.pomodoro = pomodoro
         self.countdown = countdown
+        self.ambientNoiseEngine = ambientNoiseEngine
         self.durationConfig = durationConfig
         self.presetSelection = PresetSelection.selection(for: durationConfig)
         self.pomodoroMode = pomodoro.mode
@@ -138,14 +141,16 @@ final class AppState: ObservableObject {
     convenience init(
         pomodoro: PomodoroTimerEngine,
         countdown: CountdownTimerEngine,
-        userDefaults: UserDefaults
+        userDefaults: UserDefaults,
+        ambientNoiseEngine: AmbientNoiseEngine
     ) {
         let storedConfig = DurationConfig.load(from: userDefaults)
         self.init(
             pomodoro: pomodoro,
             countdown: countdown,
             durationConfig: storedConfig,
-            userDefaults: userDefaults
+            userDefaults: userDefaults,
+            ambientNoiseEngine: ambientNoiseEngine
         )
     }
 
@@ -157,7 +162,8 @@ final class AppState: ObservableObject {
         self.init(
             pomodoro: pomodoro,
             countdown: countdown,
-            userDefaults: .standard
+            userDefaults: .standard,
+            ambientNoiseEngine: AmbientNoiseEngine()
         )
     }
 

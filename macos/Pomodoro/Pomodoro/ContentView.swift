@@ -14,7 +14,8 @@ struct ContentView: View {
 }
 
 #Preview {
+    let appState = AppState()
     ContentView()
-        .environmentObject(AppState())
-        .environmentObject(MusicController())
+        .environmentObject(appState)
+        .environmentObject(MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
 }

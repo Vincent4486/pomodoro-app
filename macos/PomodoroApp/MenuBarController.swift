@@ -18,19 +18,17 @@ final class MenuBarController {
     }
 
     private func observeAppState() {
-        stateObserver = appState.objectWillChange.sink { [weak self] in
+        stateObserver = appState.$currentMode.sink { [weak self] _ in
             self?.handleStateChange()
         }
     }
 
     private func handleStateChange() {
-        // No-op for now; observing keeps menu in sync when state changes are added.
+        updateStatusItemTitle()
     }
 
     private func configureStatusItem() {
-        if let button = statusItem.button {
-            button.title = "Pomodoro"
-        }
+        updateStatusItemTitle()
 
         let menu = NSMenu()
         let openItem = NSMenuItem(
@@ -51,6 +49,12 @@ final class MenuBarController {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    private func updateStatusItemTitle() {
+        guard let button = statusItem.button else { return }
+        let modeName = appState.currentMode.displayName
+        button.title = appState.currentMode == .idle ? "Pomodoro" : "Pomodoro • \(modeName)"
     }
 
     @objc private func openMainWindowAction() {

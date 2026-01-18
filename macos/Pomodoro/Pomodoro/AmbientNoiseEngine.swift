@@ -45,10 +45,10 @@ final class AmbientNoiseEngine {
     private var state: State
 
     init() {
-        guard let audioFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else {
+        guard let standardAudioFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else {
             preconditionFailure("Failed to create standard audio format with sample rate \(sampleRate) and 2 channels")
         }
-        format = audioFormat
+        format = standardAudioFormat
         rainAlpha = AmbientNoiseEngine.alpha(for: 1200, sampleRate: sampleRate)
         windLowAlpha = AmbientNoiseEngine.alpha(for: 2000, sampleRate: sampleRate)
         windHighAlpha = AmbientNoiseEngine.alpha(for: 200, sampleRate: sampleRate)

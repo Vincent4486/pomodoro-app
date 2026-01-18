@@ -16,3 +16,8 @@ yarn.lock
 
 # IDE
 .idea/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/

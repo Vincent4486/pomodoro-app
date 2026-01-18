@@ -34,42 +34,8 @@ final class AmbientNoiseEngine {
     }
 
     private let engine = AVAudioEngine()
-    private let sourceNode: AVAudioSourceNode
-    private let format: AVAudioFormat
-    private let sampleRate: Double = 44_100
-    private let rainAlpha: Float
-    private let windLowAlpha: Float
-    private let windHighAlpha: Float
-    private let rainPhaseIncrement: Float
-    private var stateLock = os_unfair_lock_s()
-    private var state: State
-
-    init() {
-        guard let standardAudioFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else {
-            preconditionFailure("Failed to create standard audio format with sample rate \(sampleRate) and 2 channels")
-        }
-        format = standardAudioFormat
-        rainAlpha = AmbientNoiseEngine.alpha(for: 1200, sampleRate: sampleRate)
-        windLowAlpha = AmbientNoiseEngine.alpha(for: 2000, sampleRate: sampleRate)
-        windHighAlpha = AmbientNoiseEngine.alpha(for: 200, sampleRate: sampleRate)
-        rainPhaseIncrement = Float(2.0 * Double.pi * 0.5 / sampleRate)
-        state = State(
-            type: .off,
-            volume: 0.25,
-            randomSeedL: 0x12345678,
-            randomSeedR: 0x87654321,
-            brownL: 0,
-            brownR: 0,
-            rainLpfL: 0,
-            rainLpfR: 0,
-            windLowL: 0,
-            windLowR: 0,
-            windHighL: 0,
-            windHighR: 0,
-            rainPhase: 0
-        )
-
-        sourceNode = AVAudioSourceNode { [weak self] _, _, frameCount, audioBufferList in
+    private lazy var sourceNode: AVAudioSourceNode = {
+        AVAudioSourceNode { [weak self] _, _, frameCount, audioBufferList in
             guard let self else { return noErr }
             let bufferList = UnsafeMutableAudioBufferListPointer(audioBufferList)
             let frameCount = Int(frameCount)
@@ -138,6 +104,40 @@ final class AmbientNoiseEngine {
 
             return noErr
         }
+    }()
+    private let format: AVAudioFormat
+    private let sampleRate: Double = 44_100
+    private let rainAlpha: Float
+    private let windLowAlpha: Float
+    private let windHighAlpha: Float
+    private let rainPhaseIncrement: Float
+    private var stateLock = os_unfair_lock_s()
+    private var state: State
+
+    init() {
+        guard let standardAudioFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else {
+            preconditionFailure("Failed to create standard audio format with sample rate \(sampleRate) and 2 channels")
+        }
+        format = standardAudioFormat
+        rainAlpha = AmbientNoiseEngine.alpha(for: 1200, sampleRate: sampleRate)
+        windLowAlpha = AmbientNoiseEngine.alpha(for: 2000, sampleRate: sampleRate)
+        windHighAlpha = AmbientNoiseEngine.alpha(for: 200, sampleRate: sampleRate)
+        rainPhaseIncrement = Float(2.0 * Double.pi * 0.5 / sampleRate)
+        state = State(
+            type: .off,
+            volume: 0.25,
+            randomSeedL: 0x12345678,
+            randomSeedR: 0x87654321,
+            brownL: 0,
+            brownR: 0,
+            rainLpfL: 0,
+            rainLpfR: 0,
+            windLowL: 0,
+            windLowR: 0,
+            windHighL: 0,
+            windHighR: 0,
+            rainPhase: 0
+        )
 
         engine.attach(sourceNode)
         engine.connect(sourceNode, to: engine.mainMixerNode, format: format)

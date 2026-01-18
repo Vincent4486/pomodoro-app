@@ -72,6 +72,7 @@ struct MusicPanelView: View {
 }
 
 #Preview {
+    let appState = AppState()
     MusicPanelView()
-        .environmentObject(MusicController())
+        .environmentObject(MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
 }

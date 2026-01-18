@@ -95,6 +95,26 @@ struct MainWindowView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Notifications")
+                    .font(.headline)
+                Picker("Notifications", selection: $appState.notificationPreference) {
+                    ForEach(NotificationPreference.allCases) { preference in
+                        Text(preference.title)
+                            .tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Reminder", selection: $appState.reminderPreference) {
+                    ForEach(ReminderPreference.allCases) { preference in
+                        Text(preference.title)
+                            .tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {

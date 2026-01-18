@@ -20,6 +20,7 @@
 		7C360D6A2F191F17007313D3 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C360D692F191F17007313D3 /* MenuBarController.swift */; };
 		7C360D6B2F191F17007313D3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C360D6C2F191F17007313D3 /* AppDelegate.swift */; };
 		7C360D5D2F191F17007313D3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C360D562F191F17007313D3 /* Assets.xcassets */; };
+		7C360D752F191F17007313D3 /* NotificationPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C360D762F191F17007313D3 /* NotificationPreference.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		7C360D692F191F17007313D3 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		7C360D6C2F191F17007313D3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7C360D562F191F17007313D3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7C360D762F191F17007313D3 /* NotificationPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPreference.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +95,7 @@
 			children = (
 				7C360D502F191F17007313D3 /* AppState.swift */,
 				7C360D6E2F191F17007313D3 /* DurationConfig.swift */,
+				7C360D762F191F17007313D3 /* NotificationPreference.swift */,
 				7C360D722F191F17007313D3 /* Preset.swift */,
 				7C360D742F191F17007313D3 /* PresetSelection.swift */,
 				7C360D702F191F17007313D3 /* TimerState.swift */,
@@ -205,6 +208,7 @@
 				7C360D6A2F191F17007313D3 /* MenuBarController.swift in Sources */,
 				7C360D572F191F17007313D3 /* AppState.swift in Sources */,
 				7C360D6D2F191F17007313D3 /* DurationConfig.swift in Sources */,
+				7C360D752F191F17007313D3 /* NotificationPreference.swift in Sources */,
 				7C360D712F191F17007313D3 /* Preset.swift in Sources */,
 				7C360D732F191F17007313D3 /* PresetSelection.swift in Sources */,
 				7C360D6F2F191F17007313D3 /* TimerState.swift in Sources */,

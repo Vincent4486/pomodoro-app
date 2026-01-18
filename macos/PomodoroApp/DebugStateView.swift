@@ -5,7 +5,7 @@ struct DebugStateView: View {
 
     var body: some View {
         VStack {
-            Text("currentMode: \(String(describing: appState.currentMode))")
+            Text("currentMode: \(appState.currentMode.displayName)")
             Text("completedWorkSessions: \(appState.completedWorkSessions)")
             Text("workDuration: \(appState.workDuration)")
             Text("breakDuration: \(appState.breakDuration)")

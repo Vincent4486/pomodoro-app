@@ -16,6 +16,29 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         case idle
     }
 
+    private enum MenuActionAvailability {
+        case enabled
+        case disabled
+
+        var isEnabled: Bool {
+            self == .enabled
+        }
+    }
+
+    private struct PomodoroMenuActionAvailability {
+        let start: MenuActionAvailability
+        let pauseResume: MenuActionAvailability
+        let reset: MenuActionAvailability
+        let startBreak: MenuActionAvailability
+        let skipBreak: MenuActionAvailability
+    }
+
+    private struct CountdownMenuActionAvailability {
+        let start: MenuActionAvailability
+        let pauseResume: MenuActionAvailability
+        let reset: MenuActionAvailability
+    }
+
     private unowned let appState: AppState
     private let statusItem: NSStatusItem
     private let menu: NSMenu
@@ -168,43 +191,51 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func rebuildMenu() {
         menu.removeAllItems()
 
-        switch currentMenuMode() {
-        case .pomodoro:
-            menu.addItem(sectionHeader(title: "Pomodoro — Work"))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: pomodoroPauseTitle(), action: #selector(pausePomodoro)))
-            menu.addItem(actionItem(title: "↺ Reset", action: #selector(resetPomodoro)))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Start Break", action: #selector(startBreak)))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
-            menu.addItem(actionItem(title: "Quit", action: #selector(quitApp)))
-        case .breakTime:
-            menu.addItem(sectionHeader(title: breakMenuTitle()))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: pomodoroPauseTitle(), action: #selector(pausePomodoro)))
-            menu.addItem(actionItem(title: "↺ Reset", action: #selector(resetPomodoro)))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Skip Break", action: #selector(skipBreak)))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
-            menu.addItem(actionItem(title: "Quit", action: #selector(quitApp)))
-        case .countdown:
-            menu.addItem(sectionHeader(title: "Countdown Timer"))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: countdownPauseTitle(), action: #selector(pauseCountdown)))
-            menu.addItem(actionItem(title: "↺ Reset", action: #selector(resetCountdown)))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
-            menu.addItem(actionItem(title: "Quit", action: #selector(quitApp)))
-        case .idle:
-            menu.addItem(sectionHeader(title: "Pomodoro Timer"))
-            menu.addItem(actionItem(title: "Start Pomodoro", action: #selector(startPomodoro)))
-            menu.addItem(actionItem(title: "Start Countdown", action: #selector(startCountdown)))
-            menu.addItem(.separator())
-            menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
-            menu.addItem(actionItem(title: "Quit", action: #selector(quitApp)))
-        }
+        let pomodoroAvailability = pomodoroMenuActions(for: appState.pomodoro.state)
+        menu.addItem(sectionHeader(title: pomodoroSectionTitle()))
+        menu.addItem(actionItem(title: "Start", action: #selector(startPomodoro), availability: pomodoroAvailability.start))
+        menu.addItem(actionItem(
+            title: pomodoroPauseTitle(),
+            action: #selector(pausePomodoro),
+            availability: pomodoroAvailability.pauseResume
+        ))
+        menu.addItem(actionItem(title: "Reset", action: #selector(resetPomodoro), availability: pomodoroAvailability.reset))
+        menu.addItem(.separator())
+        menu.addItem(actionItem(
+            title: "Start Break",
+            action: #selector(startBreak),
+            availability: pomodoroAvailability.startBreak
+        ))
+        menu.addItem(actionItem(
+            title: "Skip Break",
+            action: #selector(skipBreak),
+            availability: pomodoroAvailability.skipBreak
+        ))
+        menu.addItem(.separator())
+
+        let countdownAvailability = countdownMenuActions(for: appState.countdown.state)
+        let countdownMenu = NSMenu()
+        countdownMenu.addItem(actionItem(
+            title: "Start",
+            action: #selector(startCountdown),
+            availability: countdownAvailability.start
+        ))
+        countdownMenu.addItem(actionItem(
+            title: countdownPauseTitle(),
+            action: #selector(pauseCountdown),
+            availability: countdownAvailability.pauseResume
+        ))
+        countdownMenu.addItem(actionItem(
+            title: "Reset",
+            action: #selector(resetCountdown),
+            availability: countdownAvailability.reset
+        ))
+        let countdownItem = NSMenuItem(title: "Countdown", action: nil, keyEquivalent: "")
+        countdownItem.submenu = countdownMenu
+        menu.addItem(countdownItem)
+        menu.addItem(.separator())
+        menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
+        menu.addItem(actionItem(title: "Quit", action: #selector(quitApp)))
 
         statusItem.menu = menu
     }
@@ -215,9 +246,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return item
     }
 
-    private func actionItem(title: String, action: Selector) -> NSMenuItem {
+    private func actionItem(
+        title: String,
+        action: Selector,
+        availability: MenuActionAvailability = .enabled
+    ) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
+        item.isEnabled = availability.isEnabled
         return item
     }
 
@@ -234,6 +270,17 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             return "▶ Resume"
         case .running, .breakRunning, .idle:
             return "⏸ Pause"
+        }
+    }
+
+    private func pomodoroSectionTitle() -> String {
+        switch appState.pomodoro.state {
+        case .running, .paused:
+            return "Pomodoro — Work"
+        case .breakRunning, .breakPaused:
+            return "Pomodoro — \(breakMenuTitle())"
+        case .idle:
+            return "Pomodoro Timer"
         }
     }
 
@@ -255,6 +302,64 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             return "▶ Resume"
         case .running, .idle, .breakRunning, .breakPaused:
             return "⏸ Pause"
+        }
+    }
+
+    private func pomodoroMenuActions(for state: TimerState) -> PomodoroMenuActionAvailability {
+        switch state {
+        case .idle:
+            return PomodoroMenuActionAvailability(
+                start: .enabled,
+                pauseResume: .disabled,
+                reset: .enabled,
+                startBreak: .disabled,
+                skipBreak: .disabled
+            )
+        case .running:
+            return PomodoroMenuActionAvailability(
+                start: .disabled,
+                pauseResume: .enabled,
+                reset: .enabled,
+                startBreak: .enabled,
+                skipBreak: .disabled
+            )
+        case .paused:
+            return PomodoroMenuActionAvailability(
+                start: .disabled,
+                pauseResume: .enabled,
+                reset: .enabled,
+                startBreak: .enabled,
+                skipBreak: .disabled
+            )
+        case .breakRunning:
+            return PomodoroMenuActionAvailability(
+                start: .disabled,
+                pauseResume: .enabled,
+                reset: .enabled,
+                startBreak: .disabled,
+                skipBreak: .enabled
+            )
+        case .breakPaused:
+            return PomodoroMenuActionAvailability(
+                start: .disabled,
+                pauseResume: .enabled,
+                reset: .enabled,
+                startBreak: .disabled,
+                skipBreak: .enabled
+            )
+        }
+    }
+
+    private func countdownMenuActions(for state: TimerState) -> CountdownMenuActionAvailability {
+        switch state {
+        case .idle:
+            return CountdownMenuActionAvailability(start: .enabled, pauseResume: .disabled, reset: .enabled)
+        case .running:
+            return CountdownMenuActionAvailability(start: .disabled, pauseResume: .enabled, reset: .enabled)
+        case .paused:
+            return CountdownMenuActionAvailability(start: .disabled, pauseResume: .enabled, reset: .enabled)
+        case .breakRunning, .breakPaused:
+            return CountdownMenuActionAvailability(start: .disabled, pauseResume: .disabled, reset: .enabled)
         }
     }
 

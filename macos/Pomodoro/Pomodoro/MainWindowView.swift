@@ -168,6 +168,9 @@ struct MainWindowView: View {
                     .foregroundStyle(.secondary)
                 summarySection
             }
+
+            MediaControlBar()
+                .environmentObject(appState.mediaPlayer)
         }
         .padding()
         .frame(minWidth: 360)

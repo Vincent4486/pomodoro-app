@@ -14,6 +14,7 @@ final class AppState: ObservableObject {
     let countdown: CountdownTimerEngine
     let ambientNoiseEngine: AmbientNoiseEngine
     let localMusicPlayer: LocalMusicPlayer = LocalMusicPlayer()
+    @StateObject var mediaPlayer = LocalMediaPlayer()
 
     @Published var durationConfig: DurationConfig {
         didSet {

@@ -21,6 +21,7 @@ final class AppState: ObservableObject, DynamicProperty {
         restoreLastActiveMediaSource()
         bindMediaUpdates()
         updateActiveMediaSource()
+        systemMedia.connect()
     }
 
     func setWorkDuration(minutes: Int) {
@@ -144,7 +145,7 @@ final class AppState: ObservableObject, DynamicProperty {
         } else if localMedia.hasLoaded {
             setActiveMediaSource(.local)
         } else {
-            activeMediaSource = lastActiveMediaSource
+            activeMediaSource = .none
         }
     }
 

@@ -9,10 +9,6 @@ struct MainWindowView: View {
                 .font(.largeTitle)
             Text("Ready to focus.")
                 .foregroundStyle(.secondary)
-            Button("Choose Music") {
-                appState.localMedia.loadFiles()
-            }
-            .buttonStyle(.bordered)
             MediaControlBar()
             DebugStateView()
         }

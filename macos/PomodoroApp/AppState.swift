@@ -2,7 +2,7 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class AppState: ObservableObject, DynamicProperty {
+final class AppState: ObservableObject {
     @Published var currentMode: PomodoroMode = .idle
     @Published var completedWorkSessions: Int = 0
     @Published var workDuration: Int = 25 * 60
@@ -10,8 +10,8 @@ final class AppState: ObservableObject, DynamicProperty {
     @Published var longBreakDuration: Int = 15 * 60
     @Published var activeMediaSource: ActiveMediaSource = .none
     @Published var lastActiveMediaSource: ActiveMediaSource = .none
-    @StateObject var systemMedia = SystemMediaController()
-    @StateObject var localMedia = LocalMediaPlayer()
+    let systemMedia = SystemMediaController()
+    let localMedia = LocalMediaPlayer()
 
     private let lastActiveSourceKey = "lastActiveMediaSource"
     private var cancellables = Set<AnyCancellable>()
@@ -33,8 +33,6 @@ final class AppState: ObservableObject, DynamicProperty {
     func setWorkDuration(minutes: Int) {
         workDuration = minutes * 60
     }
-
-    func update() {}
 
     func togglePlayPause() {
         ensureActiveSourceBeforeControl()

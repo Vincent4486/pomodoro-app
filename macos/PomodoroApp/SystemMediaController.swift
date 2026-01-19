@@ -6,7 +6,7 @@ import AVFoundation
 final class SystemMediaController: ObservableObject {
     @Published private(set) var isSessionActive: Bool = false
     @Published private(set) var isPlaying: Bool = false
-    @Published private(set) var title: String = "No Track Selected"
+    @Published private(set) var title: String = "System Media (Inactive)"
     @Published private(set) var artist: String?
     @Published private(set) var artwork: NSImage?
     @Published private(set) var lastUpdatedAt: Date?
@@ -26,13 +26,19 @@ final class SystemMediaController: ObservableObject {
         restoreCachedMetadata()
     }
 
+    func connect() {
+        guard activateAudioSessionIfNeeded() else { return }
+        refreshNowPlayingInfo()
+    }
+
     func play() {
-        activateAudioSessionIfNeeded()
+        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.playCommand)
         refreshNowPlayingInfo()
     }
 
     func pause() {
+        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.pauseCommand)
         refreshNowPlayingInfo()
     }
@@ -46,27 +52,32 @@ final class SystemMediaController: ObservableObject {
     }
 
     func nextTrack() {
+        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.nextTrackCommand)
         refreshNowPlayingInfo()
     }
 
     func previousTrack() {
+        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.previousTrackCommand)
         refreshNowPlayingInfo()
     }
 
-    private func activateAudioSessionIfNeeded() {
-        guard !isSessionActive else { return }
+    private func activateAudioSessionIfNeeded() -> Bool {
+        guard !isSessionActive else { return true }
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setActive(true)
             isSessionActive = true
+            return true
         } catch {
             isSessionActive = false
+            return false
         }
     }
 
     private func refreshNowPlayingInfo() {
+        guard isSessionActive else { return }
         let infoCenter = MPNowPlayingInfoCenter.default()
         let info = infoCenter.nowPlayingInfo ?? [:]
 

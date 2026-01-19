@@ -65,6 +65,11 @@ final class AppState: ObservableObject, DynamicProperty {
         }
     }
 
+    func connectSystemMedia() {
+        setActiveMediaSource(.system)
+        systemMedia.connect()
+    }
+
     private func bindMediaUpdates() {
         systemMedia.$isSessionActive
             .receive(on: DispatchQueue.main)

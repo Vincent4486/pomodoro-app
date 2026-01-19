@@ -28,7 +28,7 @@ struct MediaControlBar: View {
     private var sourceLabel: String {
         switch appState.activeMediaSource {
         case .system:
-            return appState.systemMedia.isSessionActive ? "System Audio" : "System Audio (Inactive)"
+            return appState.systemMedia.isSessionActive ? "System Media" : "System Media (Inactive)"
         case .local:
             return "Local Audio"
         case .none:
@@ -71,27 +71,39 @@ struct MediaControlBar: View {
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                Text(sourceLabel)
-                    .font(.caption)
-                    .foregroundStyle(appState.activeMediaSource == .system && !appState.systemMedia.isSessionActive ? .orange : .secondary)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
+                    Text(sourceLabel)
+                        .font(.caption)
+                }
+                .foregroundStyle(appState.activeMediaSource == .system && !appState.systemMedia.isSessionActive ? .orange : .secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 12) {
-                Button(action: appState.previousTrack) {
-                    Image(systemName: "backward.fill")
+            if shouldShowConnectButton {
+                Button(action: appState.connectSystemMedia) {
+                    Text("▶︎ Connect to System Media")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderedProminent)
+            } else {
+                HStack(spacing: 12) {
+                    Button(action: appState.previousTrack) {
+                        Image(systemName: "backward.fill")
+                    }
+                    .buttonStyle(.plain)
 
-                Button(action: appState.togglePlayPause) {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                }
-                .buttonStyle(.plain)
+                    Button(action: appState.togglePlayPause) {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(.plain)
 
-                Button(action: appState.nextTrack) {
-                    Image(systemName: "forward.fill")
+                    Button(action: appState.nextTrack) {
+                        Image(systemName: "forward.fill")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
@@ -105,6 +117,21 @@ struct MediaControlBar: View {
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
+    }
+
+    private var shouldShowConnectButton: Bool {
+        appState.activeMediaSource == .system && !appState.systemMedia.isSessionActive
+    }
+
+    private var statusColor: Color {
+        switch appState.activeMediaSource {
+        case .system:
+            return appState.systemMedia.isSessionActive ? .green : .orange
+        case .local:
+            return .blue
+        case .none:
+            return .secondary
+        }
     }
 }
 

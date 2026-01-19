@@ -28,6 +28,9 @@ final class SystemMediaController: ObservableObject {
     }
 
     func connect() {
+        #if DEBUG
+        print("[SystemMediaController] connect() called - refreshing now playing info")
+        #endif
         refreshNowPlayingInfo()
     }
 
@@ -160,7 +163,7 @@ final class SystemMediaController: ObservableObject {
                 self?.refreshNowPlayingInfo()
             }
         )
-        refreshNowPlayingInfo()
+        // refreshNowPlayingInfo() will be called by connect() when invoked from MainWindowView.task after first render completes
     }
 
     deinit {

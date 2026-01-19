@@ -7,6 +7,7 @@
 
 import AppKit
 import AVFoundation
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 

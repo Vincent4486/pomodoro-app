@@ -5,6 +5,7 @@
 //  Created by Zhengyang Hu on 1/15/26.
 //
 
+import AppKit
 import Foundation
 
 enum AppleScriptRunner {
@@ -17,5 +18,13 @@ enum AppleScriptRunner {
                 continuation.resume(returning: result)
             }
         }
+    }
+}
+
+extension NSAppleEventDescriptor {
+    /// Safely reads a list descriptor by 1-based index.
+    func descriptor(at index: Int) -> NSAppleEventDescriptor? {
+        guard descriptorType == typeAEList else { return nil }
+        return descriptor(at: index)
     }
 }

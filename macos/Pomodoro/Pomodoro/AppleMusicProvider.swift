@@ -76,12 +76,3 @@ final class AppleMusicProvider: NowPlayingProvider {
         _ = await AppleScriptRunner.run(script)
     }
 }
-
-private extension NSAppleEventDescriptor {
-    func descriptor(at index: Int) -> NSAppleEventDescriptor? {
-        if descriptorType == typeAEList {
-            return descriptor(atIndex: index)
-        }
-        return nil
-    }
-}

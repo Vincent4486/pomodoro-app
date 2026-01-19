@@ -21,18 +21,18 @@ struct MediaControlBar: View {
         case .local:
             return appState.localMedia.currentTrackTitle
         case .none:
-            return appState.localMedia.currentTrackTitle
+            return "Nothing Playing"
         }
     }
 
-    private var sourceLabel: String {
+    private var artistLabel: String {
         switch appState.activeMediaSource {
         case .system:
-            return appState.systemMedia.isSessionActive ? "System Media" : "System Media (Inactive)"
+            return appState.systemMedia.artist ?? "Unknown Artist"
         case .local:
             return "Local Audio"
         case .none:
-            return "Local Audio"
+            return "Play audio in Music, Spotify, or your browser."
         }
     }
 
@@ -43,7 +43,7 @@ struct MediaControlBar: View {
         case .local:
             return appState.localMedia.currentArtwork
         case .none:
-            return appState.localMedia.currentArtwork
+            return nil
         }
     }
 
@@ -71,40 +71,32 @@ struct MediaControlBar: View {
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 6, height: 6)
-                    Text(sourceLabel)
-                        .font(.caption)
-                }
-                .foregroundStyle(appState.activeMediaSource == .system && !appState.systemMedia.isSessionActive ? .orange : .secondary)
+                Text(artistLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if shouldShowConnectButton {
-                Button(action: appState.connectSystemMedia) {
-                    Text("▶︎ Connect to System Media")
+            HStack(spacing: 12) {
+                Button(action: appState.previousTrack) {
+                    Image(systemName: "backward.fill")
                 }
-                .buttonStyle(.borderedProminent)
-            } else {
-                HStack(spacing: 12) {
-                    Button(action: appState.previousTrack) {
-                        Image(systemName: "backward.fill")
-                    }
-                    .buttonStyle(.plain)
+                .buttonStyle(.plain)
+                .disabled(!controlsEnabled)
 
-                    Button(action: appState.togglePlayPause) {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: appState.nextTrack) {
-                        Image(systemName: "forward.fill")
-                    }
-                    .buttonStyle(.plain)
+                Button(action: appState.togglePlayPause) {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 }
+                .buttonStyle(.plain)
+                .disabled(!controlsEnabled)
+
+                Button(action: appState.nextTrack) {
+                    Image(systemName: "forward.fill")
+                }
+                .buttonStyle(.plain)
+                .disabled(!controlsEnabled)
             }
+            .foregroundStyle(controlsEnabled ? .primary : .secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -119,18 +111,14 @@ struct MediaControlBar: View {
         .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
     }
 
-    private var shouldShowConnectButton: Bool {
-        appState.activeMediaSource == .system && !appState.systemMedia.isSessionActive
-    }
-
-    private var statusColor: Color {
+    private var controlsEnabled: Bool {
         switch appState.activeMediaSource {
         case .system:
-            return appState.systemMedia.isSessionActive ? .green : .orange
+            return appState.systemMedia.isSessionActive
         case .local:
-            return .blue
+            return appState.localMedia.hasLoaded
         case .none:
-            return .secondary
+            return false
         }
     }
 }

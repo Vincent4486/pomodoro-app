@@ -1,18 +1,18 @@
 import AppKit
 import MediaPlayer
-import AVFoundation
 
 @MainActor
 final class SystemMediaController: ObservableObject {
     @Published private(set) var isSessionActive: Bool = false
     @Published private(set) var isPlaying: Bool = false
-    @Published private(set) var title: String = "System Media (Inactive)"
+    @Published private(set) var title: String = "Nothing Playing"
     @Published private(set) var artist: String?
     @Published private(set) var artwork: NSImage?
     @Published private(set) var lastUpdatedAt: Date?
 
     private let commandCenter = MPRemoteCommandCenter.shared()
     private let defaults: UserDefaults
+    private var notificationTokens: [NSObjectProtocol] = []
 
     private enum CacheKey {
         static let title = "SystemMediaController.title"
@@ -24,21 +24,19 @@ final class SystemMediaController: ObservableObject {
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         restoreCachedMetadata()
+        startObserving()
     }
 
     func connect() {
-        guard activateAudioSessionIfNeeded() else { return }
         refreshNowPlayingInfo()
     }
 
     func play() {
-        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.playCommand)
         refreshNowPlayingInfo()
     }
 
     func pause() {
-        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.pauseCommand)
         refreshNowPlayingInfo()
     }
@@ -52,32 +50,16 @@ final class SystemMediaController: ObservableObject {
     }
 
     func nextTrack() {
-        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.nextTrackCommand)
         refreshNowPlayingInfo()
     }
 
     func previousTrack() {
-        guard activateAudioSessionIfNeeded() else { return }
         sendCommand(commandCenter.previousTrackCommand)
         refreshNowPlayingInfo()
     }
 
-    private func activateAudioSessionIfNeeded() -> Bool {
-        guard !isSessionActive else { return true }
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setActive(true)
-            isSessionActive = true
-            return true
-        } catch {
-            isSessionActive = false
-            return false
-        }
-    }
-
     private func refreshNowPlayingInfo() {
-        guard isSessionActive else { return }
         let infoCenter = MPNowPlayingInfoCenter.default()
         let info = infoCenter.nowPlayingInfo ?? [:]
 
@@ -86,10 +68,22 @@ final class SystemMediaController: ObservableObject {
             isPlaying = playbackState == .playing
         }
 
-        guard !info.isEmpty else { return }
+        let hasSession = !info.isEmpty || playbackState != .unknown
+        isSessionActive = hasSession
+
+        guard hasSession, !info.isEmpty else {
+            isPlaying = false
+            title = "Nothing Playing"
+            artist = nil
+            artwork = nil
+            lastUpdatedAt = nil
+            cacheMetadata(title: title, artist: nil, artwork: nil, lastUpdatedAt: Date())
+            return
+        }
 
         let newTitle = info[MPMediaItemPropertyTitle] as? String ?? "Unknown Title"
-        let newArtist = info[MPMediaItemPropertyArtist] as? String
+        let newArtist = (info[MPMediaItemPropertyArtist] as? String)
+            ?? (info[MPMediaItemPropertyAlbumArtist] as? String)
         let newArtwork = (info[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork)
             .flatMap { $0.image(at: NSSize(width: 64, height: 64)) }
         let updatedAt = Date()
@@ -144,5 +138,32 @@ final class SystemMediaController: ObservableObject {
             let interval = defaults.double(forKey: CacheKey.lastUpdatedAt)
             lastUpdatedAt = Date(timeIntervalSince1970: interval)
         }
+    }
+
+    private func startObserving() {
+        let center = NotificationCenter.default
+        notificationTokens.append(
+            center.addObserver(
+                forName: .MPNowPlayingInfoCenterNowPlayingInfoDidChange,
+                object: MPNowPlayingInfoCenter.default(),
+                queue: .main
+            ) { [weak self] _ in
+                self?.refreshNowPlayingInfo()
+            }
+        )
+        notificationTokens.append(
+            center.addObserver(
+                forName: .MPNowPlayingInfoCenterPlaybackStateDidChange,
+                object: MPNowPlayingInfoCenter.default(),
+                queue: .main
+            ) { [weak self] _ in
+                self?.refreshNowPlayingInfo()
+            }
+        )
+        refreshNowPlayingInfo()
+    }
+
+    deinit {
+        notificationTokens.forEach { NotificationCenter.default.removeObserver($0) }
     }
 }

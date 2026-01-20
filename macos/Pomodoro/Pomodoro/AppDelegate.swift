@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             configureControllersIfNeeded()
         }
     }
+    var onboardingState: OnboardingState?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
@@ -61,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .environmentObject(appState)
                 .environmentObject(appState.nowPlayingRouter)
                 .environmentObject(musicController)
+                .environmentObject(onboardingState ?? OnboardingState())
         )
         configureWindowPersistence(window)
         window.makeKeyAndOrderFront(nil)

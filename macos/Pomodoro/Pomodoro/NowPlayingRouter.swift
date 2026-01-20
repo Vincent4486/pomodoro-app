@@ -25,9 +25,9 @@ final class NowPlayingRouter: ObservableObject {
     private var activeProvider: NowPlayingProvider?
 
     init(
-        appleMusicProvider: NowPlayingProvider = AppleMusicProvider(),
-        spotifyProvider: NowPlayingProvider = SpotifyProvider(),
-        qqMusicProvider: NowPlayingProvider = QQMusicProvider(),
+        appleMusicProvider: NowPlayingProvider,
+        spotifyProvider: NowPlayingProvider,
+        qqMusicProvider: NowPlayingProvider,
         startPolling: Bool = false
     ) {
         self.appleMusicProvider = appleMusicProvider
@@ -37,6 +37,15 @@ final class NowPlayingRouter: ObservableObject {
         if startPolling {
             startPollingLoop()
         }
+    }
+
+    convenience init(startPolling: Bool = false) {
+        self.init(
+            appleMusicProvider: AppleMusicProvider(),
+            spotifyProvider: SpotifyProvider(),
+            qqMusicProvider: QQMusicProvider(),
+            startPolling: startPolling
+        )
     }
 
     deinit {

@@ -24,13 +24,13 @@ final class LocalMediaPlayer: ObservableObject {
 
     init() {
         timeControlObserver = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-            Task { @MainActor in
-                self?.isPlaying = player.timeControlStatus == .playing
+            Task { @MainActor [weak self, status = player.timeControlStatus] in
+                self?.isPlaying = status == .playing
             }
         }
 
         currentItemObserver = player.observe(\.currentItem, options: [.initial, .new]) { [weak self] _, _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.syncCurrentTrackTitle()
             }
         }

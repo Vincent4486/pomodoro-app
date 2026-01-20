@@ -64,8 +64,10 @@ final class AppState: ObservableObject {
     private var lastBreakMode: PomodoroTimerEngine.CurrentMode?
     private var currentFocusDurationSeconds: Int?
     private var currentBreakDurationSeconds: Int?
+    private var hasRequestedNotificationAuthorization: Bool = false
 
     // Designated initializer - no default arguments to avoid linker symbol issues
+    @MainActor
     init(
         pomodoro: PomodoroTimerEngine,
         countdown: CountdownTimerEngine,
@@ -89,12 +91,15 @@ final class AppState: ObservableObject {
         ) ?? .off
         self.notificationDeliveryStyle = NotificationDeliveryStyle(
             rawValue: userDefaults.string(forKey: DefaultsKey.notificationDeliveryStyle) ?? ""
-        ) ?? .inApp
+        ) ?? .system
         self.reminderPreference = ReminderPreference(
             rawValue: userDefaults.string(forKey: DefaultsKey.reminderPreference) ?? ""
         ) ?? .off
         self.lastPomodoroState = pomodoro.state
         self.lastCountdownState = countdown.state
+        self.hasRequestedNotificationAuthorization = userDefaults.bool(
+            forKey: DefaultsKey.notificationAuthorizationRequested
+        )
 
         pomodoro.objectWillChange
             .sink { [weak self] _ in
@@ -156,6 +161,7 @@ final class AppState: ObservableObject {
     }
 
     // Convenience initializer with explicit UserDefaults forwarding
+    @MainActor
     convenience init(
         pomodoro: PomodoroTimerEngine,
         countdown: CountdownTimerEngine,
@@ -173,6 +179,7 @@ final class AppState: ObservableObject {
     }
 
     // Convenience initializer with explicit standard UserDefaults
+    @MainActor
     convenience init(
         pomodoro: PomodoroTimerEngine,
         countdown: CountdownTimerEngine
@@ -186,6 +193,7 @@ final class AppState: ObservableObject {
     }
 
     // Parameterless convenience initializer with explicit defaults
+    @MainActor
     convenience init() {
         self.init(
             pomodoro: PomodoroTimerEngine(),
@@ -347,13 +355,13 @@ final class AppState: ObservableObject {
 
     private func requestNotificationAuthorizationIfNeeded() {
         guard notificationPreference != .off || reminderPreference != .off else { return }
-        guard notificationDeliveryStyle == .system else { return }
+        guard hasRequestedNotificationAuthorization == false else { return }
+        hasRequestedNotificationAuthorization = true
+        userDefaults.set(true, forKey: DefaultsKey.notificationAuthorizationRequested)
 
         notificationCenter.getNotificationSettings { [weak self] settings in
             guard let self = self else { return }
             guard settings.authorizationStatus == .notDetermined else { return }
-            guard !self.userDefaults.bool(forKey: DefaultsKey.notificationAuthorizationRequested) else { return }
-            self.userDefaults.set(true, forKey: DefaultsKey.notificationAuthorizationRequested)
 
             self.notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in
             }
@@ -367,6 +375,7 @@ final class AppState: ObservableObject {
             guard let self = self else { return }
             if settings.authorizationStatus == .notDetermined {
                 self.userDefaults.set(true, forKey: DefaultsKey.notificationAuthorizationRequested)
+                self.hasRequestedNotificationAuthorization = true
                 self.notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in
                     self.notificationCenter.getNotificationSettings { updatedSettings in
                         DispatchQueue.main.async {
@@ -375,6 +384,7 @@ final class AppState: ObservableObject {
                     }
                 }
             } else {
+                self.hasRequestedNotificationAuthorization = true
                 DispatchQueue.main.async {
                     completion(settings.authorizationStatus)
                 }
@@ -544,35 +554,25 @@ final class AppState: ObservableObject {
     private func sendNotification(title: String, body: String) {
         guard notificationPreference != .off else { return }
 
-        if notificationDeliveryStyle == .inApp {
-            showNotificationPopup(title: title, body: body)
-            return
-        }
-
         notificationCenter.getNotificationSettings { [weak self] settings in
             guard let self = self else { return }
-            switch settings.authorizationStatus {
-            case .authorized, .provisional:
-                let content = UNMutableNotificationContent()
-                content.title = title
-                content.body = body
-                if self.notificationPreference == .sound {
-                    content.sound = .default
-                }
-                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-                let request = UNNotificationRequest(
-                    identifier: UUID().uuidString,
-                    content: content,
-                    trigger: trigger
-                )
-                self.notificationCenter.add(request)
-            case .notDetermined:
-                self.requestNotificationAuthorizationIfNeeded()
-            case .denied, .ephemeral:
-                break
-            @unknown default:
-                break
+            guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
+                return
             }
+
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            if self.notificationPreference == .sound {
+                content.sound = .default
+            }
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: trigger
+            )
+            self.notificationCenter.add(request)
         }
     }
 

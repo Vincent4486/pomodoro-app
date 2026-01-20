@@ -25,6 +25,6 @@ extension NSAppleEventDescriptor {
     /// Safely reads a list descriptor by 1-based index.
     func descriptor(at index: Int) -> NSAppleEventDescriptor? {
         guard descriptorType == typeAEList else { return nil }
-        return descriptor(at: index)
+        return atIndex(index)
     }
 }

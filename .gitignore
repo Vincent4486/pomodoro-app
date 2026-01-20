@@ -8,7 +8,7 @@ target/
 # Node / Frontend
 node_modules/
 dist/
-yarn.lock
+yarn.lock 
 
 # Logs / cache
 *.log

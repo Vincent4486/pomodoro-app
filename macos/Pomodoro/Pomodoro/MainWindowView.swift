@@ -10,6 +10,7 @@ import SwiftUI
 struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var musicController: MusicController
+    @EnvironmentObject private var onboardingState: OnboardingState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workMinutesText = ""
     @State private var shortBreakMinutesText = ""
@@ -110,6 +111,14 @@ struct MainWindowView: View {
                     Text("Notifications")
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(.secondary)
+                    Picker("Delivery", selection: $appState.notificationDeliveryStyle) {
+                        ForEach(NotificationDeliveryStyle.allCases) { style in
+                            Text(style.title)
+                                .tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
                     Picker("Notifications", selection: $appState.notificationPreference) {
                         ForEach(NotificationPreference.allCases) { preference in
                             Text(preference.title)
@@ -138,6 +147,16 @@ struct MainWindowView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Setup")
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Button("Open Onboarding") {
+                        onboardingState.reopen()
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 Divider()
@@ -198,15 +217,24 @@ struct MainWindowView: View {
                 commitDuration(.longBreak)
             }
 
-            if let popup = appState.transitionPopup {
-                TransitionPopupView(message: popup.message)
-                    .padding(.top, 12)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
-                    .allowsHitTesting(false)
+            if appState.transitionPopup != nil || appState.notificationPopup != nil {
+                VStack(spacing: 8) {
+                    if let popup = appState.transitionPopup {
+                        TransitionPopupView(message: popup.message)
+                    }
+                    if let popup = appState.notificationPopup {
+                        InAppNotificationView(title: popup.title, message: popup.body)
+                    }
+                }
+                .padding(.top, 12)
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
+                .allowsHitTesting(false)
             }
         }
         .animation(reduceMotion ? .linear(duration: 0.2) : .easeInOut(duration: 0.25),
                    value: appState.transitionPopup?.id)
+        .animation(reduceMotion ? .linear(duration: 0.2) : .easeInOut(duration: 0.25),
+                   value: appState.notificationPopup?.id)
     }
 
     private var ambientSoundBinding: Binding<FocusSoundType> {
@@ -277,6 +305,25 @@ struct MainWindowView: View {
                 .padding(.vertical, 8)
                 .background(.ultraThinMaterial, in: Capsule())
                 .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+        }
+    }
+
+    private struct InAppNotificationView: View {
+        let title: String
+        let message: String
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                Text(message)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
         }
     }
 

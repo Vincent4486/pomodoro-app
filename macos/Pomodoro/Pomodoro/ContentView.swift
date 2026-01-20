@@ -8,8 +8,15 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var onboardingState: OnboardingState
+
     var body: some View {
         MainWindowView()
+            .sheet(isPresented: $onboardingState.isPresented, onDismiss: {
+                onboardingState.markCompleted()
+            }) {
+                OnboardingFlowView()
+            }
     }
 }
 
@@ -19,4 +26,5 @@ struct ContentView: View {
         .environmentObject(appState)
         .environmentObject(appState.nowPlayingRouter)
         .environmentObject(MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
+        .environmentObject(OnboardingState())
 }

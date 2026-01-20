@@ -26,6 +26,31 @@ enum NotificationPreference: String, CaseIterable, Identifiable {
     }
 }
 
+enum NotificationDeliveryStyle: String, CaseIterable, Identifiable {
+    case system
+    case inApp
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system:
+            return "System Notifications"
+        case .inApp:
+            return "In-App Popup"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .system:
+            return "Use macOS banners or alerts."
+        case .inApp:
+            return "Show a confirmation popup inside the app window."
+        }
+    }
+}
+
 enum ReminderPreference: String, CaseIterable, Identifiable {
     case off
     case oneMinute

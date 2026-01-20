@@ -37,6 +37,12 @@ final class AppState: ObservableObject {
             requestNotificationAuthorizationIfNeeded()
         }
     }
+    @Published var notificationDeliveryStyle: NotificationDeliveryStyle {
+        didSet {
+            saveNotificationDeliveryStyle()
+            requestNotificationAuthorizationIfNeeded()
+        }
+    }
     @Published var reminderPreference: ReminderPreference {
         didSet {
             saveReminderPreference()
@@ -44,6 +50,7 @@ final class AppState: ObservableObject {
         }
     }
     @Published private(set) var transitionPopup: TransitionPopup?
+    @Published private(set) var notificationPopup: NotificationPopup?
 
     private var cancellables: Set<AnyCancellable> = []
     private let userDefaults: UserDefaults
@@ -80,6 +87,9 @@ final class AppState: ObservableObject {
         self.notificationPreference = NotificationPreference(
             rawValue: userDefaults.string(forKey: DefaultsKey.notificationPreference) ?? ""
         ) ?? .off
+        self.notificationDeliveryStyle = NotificationDeliveryStyle(
+            rawValue: userDefaults.string(forKey: DefaultsKey.notificationDeliveryStyle) ?? ""
+        ) ?? .inApp
         self.reminderPreference = ReminderPreference(
             rawValue: userDefaults.string(forKey: DefaultsKey.reminderPreference) ?? ""
         ) ?? .off
@@ -269,6 +279,7 @@ final class AppState: ObservableObject {
     private enum DefaultsKey {
         static let notificationPreference = "notification.preference"
         static let reminderPreference = "notification.reminderPreference"
+        static let notificationDeliveryStyle = "notification.deliveryStyle"
         static let dailyStats = "dailyStats.current"
         static let presetSelection = "durationConfig.presetSelection"
         static let notificationAuthorizationRequested = "notification.authorizationRequested"
@@ -276,6 +287,10 @@ final class AppState: ObservableObject {
 
     private func saveNotificationPreference() {
         userDefaults.set(notificationPreference.rawValue, forKey: DefaultsKey.notificationPreference)
+    }
+
+    private func saveNotificationDeliveryStyle() {
+        userDefaults.set(notificationDeliveryStyle.rawValue, forKey: DefaultsKey.notificationDeliveryStyle)
     }
 
     private func saveReminderPreference() {
@@ -332,6 +347,7 @@ final class AppState: ObservableObject {
 
     private func requestNotificationAuthorizationIfNeeded() {
         guard notificationPreference != .off || reminderPreference != .off else { return }
+        guard notificationDeliveryStyle == .system else { return }
 
         notificationCenter.getNotificationSettings { [weak self] settings in
             guard let self = self else { return }
@@ -340,6 +356,28 @@ final class AppState: ObservableObject {
             self.userDefaults.set(true, forKey: DefaultsKey.notificationAuthorizationRequested)
 
             self.notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in
+            }
+        }
+    }
+
+    func requestSystemNotificationAuthorization(
+        completion: @escaping (UNAuthorizationStatus) -> Void
+    ) {
+        notificationCenter.getNotificationSettings { [weak self] settings in
+            guard let self = self else { return }
+            if settings.authorizationStatus == .notDetermined {
+                self.userDefaults.set(true, forKey: DefaultsKey.notificationAuthorizationRequested)
+                self.notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in
+                    self.notificationCenter.getNotificationSettings { updatedSettings in
+                        DispatchQueue.main.async {
+                            completion(updatedSettings.authorizationStatus)
+                        }
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion(settings.authorizationStatus)
+                }
             }
         }
     }
@@ -506,6 +544,11 @@ final class AppState: ObservableObject {
     private func sendNotification(title: String, body: String) {
         guard notificationPreference != .off else { return }
 
+        if notificationDeliveryStyle == .inApp {
+            showNotificationPopup(title: title, body: body)
+            return
+        }
+
         notificationCenter.getNotificationSettings { [weak self] settings in
             guard let self = self else { return }
             switch settings.authorizationStatus {
@@ -530,6 +573,18 @@ final class AppState: ObservableObject {
             @unknown default:
                 break
             }
+        }
+    }
+
+    private func showNotificationPopup(title: String, body: String) {
+        let popup = NotificationPopup(id: UUID(), title: title, body: body)
+        DispatchQueue.main.async {
+            self.notificationPopup = popup
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            guard let self = self else { return }
+            guard self.notificationPopup?.id == popup.id else { return }
+            self.notificationPopup = nil
         }
     }
 
@@ -576,5 +631,11 @@ extension AppState {
     struct TransitionPopup: Identifiable, Equatable {
         let id: UUID
         let message: String
+    }
+
+    struct NotificationPopup: Identifiable, Equatable {
+        let id: UUID
+        let title: String
+        let body: String
     }
 }

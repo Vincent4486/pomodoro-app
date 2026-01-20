@@ -12,11 +12,13 @@ struct PomodoroApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appState: AppState
     @StateObject private var musicController: MusicController
+    @StateObject private var onboardingState: OnboardingState
 
     init() {
         let appState = AppState()
         _appState = StateObject(wrappedValue: appState)
         _musicController = StateObject(wrappedValue: MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
+        _onboardingState = StateObject(wrappedValue: OnboardingState())
     }
 
     var body: some Scene {
@@ -25,6 +27,7 @@ struct PomodoroApp: App {
                 .environmentObject(appState)
                 .environmentObject(appState.nowPlayingRouter)
                 .environmentObject(musicController)
+                .environmentObject(onboardingState)
                 .task(id: ObjectIdentifier(appState)) {
                     appDelegate.appState = appState
                     appDelegate.musicController = musicController

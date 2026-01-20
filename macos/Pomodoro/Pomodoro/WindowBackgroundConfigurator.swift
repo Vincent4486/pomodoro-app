@@ -13,7 +13,7 @@ import SwiftUI
 /// Responsibilities:
 /// - Enables true wallpaper blur by making the window non-opaque with a clear background
 /// - Hides the title text and titlebar separator while keeping the traffic lights visible
-/// - Keeps the toolbar background invisible so the content can bleed into the titlebar
+/// - Keeps the header invisible so the content can bleed into the titlebar
 /// - Preserves window dragging by allowing the full background to act as a drag region
 struct WindowBackgroundConfigurator: NSViewRepresentable {
     final class HostingView: NSView {
@@ -46,7 +46,7 @@ extension NSWindow {
     /// - Transparent title bar with hidden title text
     /// - Visible traffic light controls
     /// - Preserves drag gestures on the window background
-    /// - Keeps the toolbar area invisible while reserving space for controls
+    /// - Keeps the header visually invisible
     func applyPomodoroWindowChrome() {
         // Enable wallpaper blur support
         isOpaque = false
@@ -57,31 +57,14 @@ extension NSWindow {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         titlebarSeparatorStyle = .none
-        styleMask.insert(.fullSizeContentView)
+        styleMask.formUnion([.titled, .fullSizeContentView, .closable, .miniaturizable, .resizable])
+        toolbar = nil
         isMovableByWindowBackground = true
 
-        installHiddenToolbarIfNeeded()
         showTrafficLights()
 
         // Ensure vibrancy can pass through
         contentView?.wantsLayer = true
-    }
-
-    private func installHiddenToolbarIfNeeded() {
-        if toolbar == nil || toolbar?.identifier != .pomodoroHiddenToolbar {
-            let toolbar = NSToolbar(identifier: .pomodoroHiddenToolbar)
-            toolbar.delegate = HiddenToolbarDelegate.shared
-            toolbar.displayMode = .iconOnly
-            toolbar.sizeMode = .regular
-            toolbar.showsBaselineSeparator = false
-            toolbar.allowsUserCustomization = false
-            toolbar.autosavesConfiguration = false
-            self.toolbar = toolbar
-        }
-
-        toolbar?.isVisible = true
-        toolbar?.showsBaselineSeparator = false
-        toolbarStyle = .unified
     }
 
     private func showTrafficLights() {
@@ -93,18 +76,4 @@ extension NSWindow {
             button.superview?.isHidden = false
         }
     }
-}
-
-private final class HiddenToolbarDelegate: NSObject, NSToolbarDelegate {
-    static let shared = HiddenToolbarDelegate()
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [.flexibleSpace] }
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [.flexibleSpace] }
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-        NSToolbarItem(itemIdentifier: itemIdentifier)
-    }
-}
-
-private extension NSToolbar.Identifier {
-    static let pomodoroHiddenToolbar = NSToolbar.Identifier("PomodoroHiddenToolbar")
 }

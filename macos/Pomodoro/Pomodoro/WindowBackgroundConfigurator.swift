@@ -69,6 +69,15 @@ extension NSWindow {
 
     private func showTrafficLights() {
         let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+
+        // Make sure the titlebar container stays visible even though the chrome is hidden
+        if let titlebarView = standardWindowButton(.closeButton)?.superview {
+            titlebarView.isHidden = false
+            titlebarView.alphaValue = 1
+            titlebarView.superview?.isHidden = false
+            titlebarView.superview?.alphaValue = 1
+        }
+
         buttons.forEach { type in
             guard let button = standardWindowButton(type) else { return }
             button.isHidden = false

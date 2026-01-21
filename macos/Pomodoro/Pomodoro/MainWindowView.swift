@@ -210,7 +210,9 @@ struct MainWindowView: View {
                 MediaControlBar()
                     .environmentObject(appState.nowPlayingRouter)
             }
-            .padding()
+            .padding(.top, 28)
+            .padding(.horizontal)
+            .padding(.bottom)
             .frame(minWidth: 360)
             .onAppear {
                 syncDurationTexts()

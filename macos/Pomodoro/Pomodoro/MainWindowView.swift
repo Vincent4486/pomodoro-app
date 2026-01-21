@@ -17,6 +17,7 @@ struct MainWindowView: View {
     @State private var longBreakMinutesText = ""
     @FocusState private var focusedField: DurationField?
     @State private var longBreakIntervalValue: Int = 4
+    @State private var sidebarSelection: SidebarItem = .pomodoro
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -29,191 +30,14 @@ struct MainWindowView: View {
             // for layered glass effects on top of this main background blur
             VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
                 .ignoresSafeArea()
-            
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(titleForPomodoroMode(appState.pomodoroMode))
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Text(formattedTime(appState.pomodoro.remainingSeconds))
-                        .font(.system(size: 48, weight: .semibold, design: .rounded).monospacedDigit())
-                    Text("State: \(labelForPomodoroState(appState.pomodoro.state))")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Preset")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Picker("Preset", selection: presetSelectionBinding) {
-                        ForEach(Preset.builtIn) { preset in
-                            Text(preset.name)
-                                .tag(PresetSelection.preset(preset))
-                        }
-                        Text("Custom")
-                            .tag(PresetSelection.custom)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                HStack(spacing: 10) {
-                    let actions = pomodoroActions(for: appState.pomodoro.state)
-                    ActionButton("Start", isEnabled: actions.canStart) {
-                        appState.pomodoro.start()
-                    }
-                    ActionButton("Pause", isEnabled: actions.canPause) {
-                        appState.pomodoro.pause()
-                    }
-                    ActionButton("Resume", isEnabled: actions.canResume) {
-                        appState.pomodoro.resume()
-                    }
-                    ActionButton("Reset") {
-                        appState.pomodoro.reset()
-                    }
-                    ActionButton("Skip Break", isEnabled: actions.canSkipBreak) {
-                        appState.pomodoro.skipBreak()
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Durations")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    DurationInputRow(
-                        title: "Work",
-                        text: $workMinutesText,
-                        field: .work,
-                        focusedField: $focusedField,
-                        isFocused: focusedField == .work
-                    ) {
-                        commitDuration(.work)
-                    }
-
-                    DurationInputRow(
-                        title: "Short Break",
-                        text: $shortBreakMinutesText,
-                        field: .shortBreak,
-                        focusedField: $focusedField,
-                        isFocused: focusedField == .shortBreak
-                    ) {
-                        commitDuration(.shortBreak)
-                    }
-
-                    DurationInputRow(
-                        title: "Long Break",
-                        text: $longBreakMinutesText,
-                        field: .longBreak,
-                        focusedField: $focusedField,
-                        isFocused: focusedField == .longBreak
-                    ) {
-                        commitDuration(.longBreak)
-                    }
-
-                    LongBreakIntervalRow(
-                        interval: $longBreakIntervalValue
-                    ) {
-                        updateDurationConfig(longBreakInterval: longBreakIntervalValue)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Notifications")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Picker("Delivery", selection: $appState.notificationDeliveryStyle) {
-                        ForEach(NotificationDeliveryStyle.allCases) { style in
-                            Text(style.title)
-                                .tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Picker("Notifications", selection: $appState.notificationPreference) {
-                        ForEach(NotificationPreference.allCases) { preference in
-                            Text(preference.title)
-                                .tag(preference)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Picker("Reminder", selection: $appState.reminderPreference) {
-                        ForEach(ReminderPreference.allCases) { preference in
-                            Text(preference.title)
-                                .tag(preference)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Ambient Sound")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Picker("Ambient Sound", selection: ambientSoundBinding) {
-                        ForEach(FocusSoundType.allCases) { sound in
-                            Text(sound.displayName)
-                                .tag(sound)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Setup")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Button("Open Onboarding") {
-                        onboardingState.reopen()
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Countdown")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Text(formattedTime(appState.countdown.remainingSeconds))
-                        .font(.system(size: 40, weight: .semibold, design: .rounded).monospacedDigit())
-                    Text("State: \(appState.countdown.state.rawValue.capitalized)")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack(spacing: 10) {
-                    let actions = countdownActions(for: appState.countdown.state)
-                    ActionButton("Start", isEnabled: actions.canStart) {
-                        appState.countdown.start()
-                    }
-                    ActionButton("Pause", isEnabled: actions.canPause) {
-                        appState.countdown.pause()
-                    }
-                    ActionButton("Resume", isEnabled: actions.canResume) {
-                        appState.countdown.resume()
-                    }
-                    ActionButton("Reset") {
-                        appState.countdown.reset()
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Today's Summary")
-                        .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    summarySection
-                }
-
-                MediaControlBar()
-                    .environmentObject(appState.nowPlayingRouter)
+            NavigationSplitView {
+                sidebar
+            } detail: {
+                detailView
             }
-            .padding(.top, 28)
-            .padding(.horizontal)
-            .padding(.bottom)
-            .frame(minWidth: 360)
+            .navigationSplitViewStyle(.balanced)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
             .onAppear {
                 syncDurationTexts()
                 syncLongBreakInterval()
@@ -250,6 +74,247 @@ struct MainWindowView: View {
                    value: appState.notificationPopup?.id)
     }
 
+    private var sidebar: some View {
+        List(selection: $sidebarSelection) {
+            ForEach(SidebarItem.allCases) { item in
+                Label(item.title, systemImage: item.systemImage)
+                    .tag(item)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch sidebarSelection {
+        case .pomodoro:
+            pomodoroView
+        case .countdown:
+            countdownView
+        case .audioAndMusic:
+            audioAndMusicView
+        case .summary:
+            summaryView
+        case .settings:
+            settingsView
+        }
+    }
+
+    private var pomodoroView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(titleForPomodoroMode(appState.pomodoroMode))
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Text(formattedTime(appState.pomodoro.remainingSeconds))
+                    .font(.system(size: 48, weight: .semibold, design: .rounded).monospacedDigit())
+                Text("State: \(labelForPomodoroState(appState.pomodoro.state))")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Preset")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Picker("Preset", selection: presetSelectionBinding) {
+                    ForEach(Preset.builtIn) { preset in
+                        Text(preset.name)
+                            .tag(PresetSelection.preset(preset))
+                    }
+                    Text("Custom")
+                        .tag(PresetSelection.custom)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            HStack(spacing: 10) {
+                let actions = pomodoroActions(for: appState.pomodoro.state)
+                ActionButton("Start", isEnabled: actions.canStart) {
+                    appState.pomodoro.start()
+                }
+                ActionButton("Pause", isEnabled: actions.canPause) {
+                    appState.pomodoro.pause()
+                }
+                ActionButton("Resume", isEnabled: actions.canResume) {
+                    appState.pomodoro.resume()
+                }
+                ActionButton("Reset") {
+                    appState.pomodoro.reset()
+                }
+                ActionButton("Skip Break", isEnabled: actions.canSkipBreak) {
+                    appState.pomodoro.skipBreak()
+                }
+            }
+        }
+        .padding(.top, 28)
+        .padding(.horizontal)
+        .padding(.bottom)
+        .frame(minWidth: 360, alignment: .leading)
+    }
+
+    private var countdownView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Countdown")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Text(formattedTime(appState.countdown.remainingSeconds))
+                    .font(.system(size: 40, weight: .semibold, design: .rounded).monospacedDigit())
+                Text("State: \(appState.countdown.state.rawValue.capitalized)")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                let actions = countdownActions(for: appState.countdown.state)
+                ActionButton("Start", isEnabled: actions.canStart) {
+                    appState.countdown.start()
+                }
+                ActionButton("Pause", isEnabled: actions.canPause) {
+                    appState.countdown.pause()
+                }
+                ActionButton("Resume", isEnabled: actions.canResume) {
+                    appState.countdown.resume()
+                }
+                ActionButton("Reset") {
+                    appState.countdown.reset()
+                }
+            }
+        }
+        .padding(.top, 28)
+        .padding(.horizontal)
+        .padding(.bottom)
+        .frame(minWidth: 360, alignment: .leading)
+    }
+
+    private var audioAndMusicView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Ambient Sound")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Picker("Ambient Sound", selection: ambientSoundBinding) {
+                    ForEach(FocusSoundType.allCases) { sound in
+                        Text(sound.displayName)
+                            .tag(sound)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            MediaControlBar()
+                .environmentObject(appState.nowPlayingRouter)
+        }
+        .padding(.top, 28)
+        .padding(.horizontal)
+        .padding(.bottom)
+        .frame(minWidth: 360, alignment: .leading)
+    }
+
+    private var summaryView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Today's Summary")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                summarySection
+            }
+        }
+        .padding(.top, 28)
+        .padding(.horizontal)
+        .padding(.bottom)
+        .frame(minWidth: 360, alignment: .leading)
+    }
+
+    private var settingsView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Durations")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                DurationInputRow(
+                    title: "Work",
+                    text: $workMinutesText,
+                    field: .work,
+                    focusedField: $focusedField,
+                    isFocused: focusedField == .work
+                ) {
+                    commitDuration(.work)
+                }
+
+                DurationInputRow(
+                    title: "Short Break",
+                    text: $shortBreakMinutesText,
+                    field: .shortBreak,
+                    focusedField: $focusedField,
+                    isFocused: focusedField == .shortBreak
+                ) {
+                    commitDuration(.shortBreak)
+                }
+
+                DurationInputRow(
+                    title: "Long Break",
+                    text: $longBreakMinutesText,
+                    field: .longBreak,
+                    focusedField: $focusedField,
+                    isFocused: focusedField == .longBreak
+                ) {
+                    commitDuration(.longBreak)
+                }
+
+                LongBreakIntervalRow(
+                    interval: $longBreakIntervalValue
+                ) {
+                    updateDurationConfig(longBreakInterval: longBreakIntervalValue)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Notifications")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Picker("Delivery", selection: $appState.notificationDeliveryStyle) {
+                    ForEach(NotificationDeliveryStyle.allCases) { style in
+                        Text(style.title)
+                            .tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Notifications", selection: $appState.notificationPreference) {
+                    ForEach(NotificationPreference.allCases) { preference in
+                        Text(preference.title)
+                            .tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Reminder", selection: $appState.reminderPreference) {
+                    ForEach(ReminderPreference.allCases) { preference in
+                        Text(preference.title)
+                            .tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Setup")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Button("Open Onboarding") {
+                    onboardingState.reopen()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.top, 28)
+        .padding(.horizontal)
+        .padding(.bottom)
+        .frame(minWidth: 360, alignment: .leading)
+    }
+
     private var ambientSoundBinding: Binding<FocusSoundType> {
         Binding(
             get: { musicController.currentFocusSound },
@@ -267,6 +332,46 @@ struct MainWindowView: View {
         case work
         case shortBreak
         case longBreak
+    }
+
+    private enum SidebarItem: String, CaseIterable, Identifiable {
+        case pomodoro
+        case countdown
+        case audioAndMusic
+        case summary
+        case settings
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .pomodoro:
+                return "Pomodoro"
+            case .countdown:
+                return "Countdown"
+            case .audioAndMusic:
+                return "Audio&Music"
+            case .summary:
+                return "Summary"
+            case .settings:
+                return "Settings"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .pomodoro:
+                return "timer"
+            case .countdown:
+                return "hourglass"
+            case .audioAndMusic:
+                return "music.note.list"
+            case .summary:
+                return "chart.bar"
+            case .settings:
+                return "gearshape"
+            }
+        }
     }
 
     private struct DurationInputRow: View {

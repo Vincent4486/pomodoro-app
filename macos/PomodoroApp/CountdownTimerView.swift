@@ -3,6 +3,7 @@ import SwiftUI
 struct CountdownTimerView: View {
     @EnvironmentObject private var countdownState: CountdownTimerState
     @State private var selectedMinutes: Int = 10
+    @State private var customMinutesText: String = "10"
 
     private let minuteOptions = Array(stride(from: 1, through: 120, by: 1))
 
@@ -26,6 +27,21 @@ struct CountdownTimerView: View {
                 .frame(maxWidth: 160)
                 .onChange(of: selectedMinutes) { newValue in
                     countdownState.setDuration(minutes: newValue)
+                    customMinutesText = "\(newValue)"
+                }
+
+                HStack(spacing: 8) {
+                    TextField("Custom (min)", text: $customMinutesText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 120)
+                        .multilineTextAlignment(.trailing)
+                        .onSubmit {
+                            applyCustomMinutes()
+                        }
+                    Button("Set") {
+                        applyCustomMinutes()
+                    }
+                    .disabled(!isCustomMinutesValid)
                 }
 
                 Spacer()
@@ -54,12 +70,17 @@ struct CountdownTimerView: View {
             }
         }
         .onAppear {
-            selectedMinutes = max(1, Int(countdownState.duration / 60))
+            let minutes = max(1, Int(countdownState.duration / 60))
+            selectedMinutes = minutes
+            customMinutesText = "\(minutes)"
         }
         .onChange(of: countdownState.duration) { newValue in
             let newMinutes = max(1, Int(newValue / 60))
             if newMinutes != selectedMinutes {
                 selectedMinutes = newMinutes
+            }
+            if customMinutesText != "\(newMinutes)" {
+                customMinutesText = "\(newMinutes)"
             }
         }
         .padding()
@@ -71,6 +92,23 @@ struct CountdownTimerView: View {
         let minutes = totalSeconds / 60
         let remainingSeconds = totalSeconds % 60
         return String(format: "%02d:%02d", minutes, remainingSeconds)
+    }
+
+    private var isCustomMinutesValid: Bool {
+        guard let value = Int(customMinutesText.trimmingCharacters(in: .whitespaces)),
+              value > 0 else {
+            return false
+        }
+        return true
+    }
+
+    private func applyCustomMinutes() {
+        guard let value = Int(customMinutesText.trimmingCharacters(in: .whitespaces)),
+              value > 0 else {
+            return
+        }
+        selectedMinutes = value
+        countdownState.setDuration(minutes: value)
     }
 }
 

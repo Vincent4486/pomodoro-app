@@ -50,6 +50,7 @@ Update history: see history_versions/ for archived notes.
 - 🎵 Simple music status support (Apple Music / Spotify)
 - 🪟 Glass-panel UI with background blur and depth
 - 🌙 macOS dark mode support
+- 💻 Real time menubar support on MacBooks
 
 ## 🚀 Running the App (1.0.0+ Swift)
 
@@ -124,9 +125,6 @@ Planned for future versions:
 ---
 
 ## 🤝 Collaboration & Contributions
-
-Contributions, ideas, and feedback are welcome — this project is actively evolving
-through design and feature iteration during the 0.6.0 beta phase.
 
 You’re welcome to help improve:
 

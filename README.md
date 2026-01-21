@@ -1,19 +1,19 @@
-# Pomodoro Timer
+# 🍅 Pomodoro Timer
 
-Pomodoro App — A modern, distraction-free Pomodoro & focus timer with session presets, long-break cycles, productivity statistics, and a minimal glass-style UI.
+**Pomodoro Timer** is a modern, distraction-free Pomodoro & focus timer designed for macOS.  
+It features session presets, long-break cycles, productivity summaries, ambient audio, and a macOS-inspired **glass / liquid glass UI**.
 
-The 0.5.x branch introduces a new glass-panel layout system with separate tiles for the timer, controls, and productivity summary, preparing the foundation for a more refined macOS-style “liquid glass” UI in future releases.
+Version **1.0.0** marks the first stable milestone after extensive UI, architecture, and workflow refinement.
 
 <img width="320" height="320" alt="Firefly_Gemini Flash_Make it in to normal white background 328819" src="https://github.com/user-attachments/assets/629e345e-5540-4439-8e47-30f3db8c6cad" />
 
-> ⚠️ **Notice**  
-> Migration to native Swift in progress 🏗️ <br>
-> The app will not work during the migration process ❌
+## Screenshot
+<img width="1046" height="638" alt="Screenshot 2026-01-21 at 10 10 07 PM" src="https://github.com/user-attachments/assets/7135a578-4191-4aea-9629-cd7072180557" />
 
 ## Version status
 
 Current Version: <br>
-🧪 0.7.0 Beta → ✅ 1.0.0
+✅ 1.0.0
 
 Update history: see history_versions/ for archived notes.
 
@@ -29,68 +29,37 @@ Update history: see history_versions/ for archived notes.
 
 ## Changelog (short)
 
-## 0.7.x
-- General UI improvements
-- New navigation bar
-- New pop up reminders when timer season ends
+## 1.0.x
+-fully migrated to Swift
+- Major UI polish and layout refinement
+- New sidebar-based navigation
+- Improved glass / background blur rendering
+- Stability improvements
 
-## Features
+## ✅ Features
 
-- Customizable work/break durations with long-break cadence
-- Session presets for quick switching (25/5, 50/10, etc.)
-- Start, pause/resume, and reset controls with clear state feedback
-- Dedicated focus timer with a separate mini countdown window
-- Session-end pop-up reminder and optional chime
-- Daily productivity summary (focus time, break counts, sessions completed)
-- Auto-saves daily progress and stats history
-- Optional dark mode for late-night sessions
-- Countdown mini-timer window
-- Simple built-in music player and white noise player window
-- Glass-panel UI layout with layered tiles and depth
+- ⏱️ Customizable work, short break, and long break durations
+- 🔁 Long-break interval configuration (e.g. every 4 sessions)
+- ⚡ Presets for quick switching (25/5, 50/10, 90/15, Custom)
+- ▶️ Start / Pause / Resume / Reset with clear state feedback
+- ⏳ Dedicated countdown timer mode
+- 🔔 Session-end pop-up reminder with optional sound
+- 📊 Daily productivity summary (focus time, sessions, breaks)
+- 💾 Automatic saving of daily stats
+- 🎧 Ambient sound player (white noise, brown noise, rain, wind)
+- 🎵 Simple music status support (Apple Music / Spotify)
+- 🪟 Glass-panel UI with background blur and depth
+- 🌙 macOS dark mode support
 
-## 🚀 Running the App (v0.5.0+ Migration Build)
+## 🚀 Running the App (1.0.0+ Swift)
 
-This version introduces a new architecture:
-
-- Python powers the Pomodoro engine (backend)
-- Tauri provides the desktop shell
-- Svelte is the frontend UI
-
-The Python backend is launched automatically by Tauri through an IPC bridge — no manual scripts are required.
-
-## ▶️ Start the App (Development Mode: Packaged app working on future generations)
-
-Run these commands from the project root:
-
-```bash
-cd frontend
-npm install
-npm run tauri dev
-```
-
-or (If npm installed)
-
-```bash
-cd frontend
-npm run tauri dev
-```
+Using the official release or running with Xcode
 
 ---
 
-### 🔧 Requirements
+### 🔧 Requirements for Developing
 
-Install the following:
-
-- Python 3.10+
-- Node.js 18+
-- Rust toolchain
-- Tauri CLI
-
-Install Tauri CLI:
-
-```bash
-npm install -g @tauri-apps/cli
-```
+Install the following: Xcode
 
 ---
 
@@ -98,10 +67,10 @@ npm install -g @tauri-apps/cli
 
 The current UI uses a structured glass tile system inspired by macOS 26 (liquid glass).
 
-Version 0.7.x focuses on:
+Version 1.0.x+ focuses on:
 
 - Clean up UI
-- General UI improvements
+- Updating macOS 15 style to macOS 26 liquid glass.
 
 The goal of upcoming versions is to transition toward a softer, macOS-inspired liquid glass look — with more subtle contrast, improved typography, and refined panel depth.
 
@@ -141,7 +110,7 @@ The goal of upcoming versions is to transition toward a softer, macOS-inspired l
 >
 >Thank you for your patience and interest ❤️
 
-## 🗺️ Roadmap (Post-0.6.0)
+## 🗺️ Roadmap (Post-1.0.0)
 
 Planned for future versions:
 
@@ -149,7 +118,7 @@ Planned for future versions:
 - 🪄 Smoother button & timer animations
 - 💡 Better logic
 - 🔔 Advanced reminder scheduling & customization
-- 🖥️ Mac menu bar support
+- ⌨️ More features
 - 🛎️ Issue requirements
 
 ---
@@ -180,24 +149,50 @@ You can open a Discussion or Issue instead of a PR.
 
 Constructive feedback is especially welcome during the current 0.6.x UI refinement phase.
 
-## Usage
+## 🕰️ Legacy Systems (Archived)
 
-The Tauri shell launches the Svelte UI and starts the Python backend in `backend/app.py` automatically.
+Pomodoro has gone through multiple architectural stages during its development.
+All previous implementations are preserved **for reference only** and are no longer
+part of the active product direction.
 
-### Legacy Tkinter UI (manual fallback)
+**Status**
+- ❌ Deprecated
+- ❌ Prototype only
+- ❌ No longer representative of the project
+- ❌ No longer maintained
 
-The Tkinter interface is archived in `history/ui-tkinter-0.4.x` and no longer launches by default. If you need it:
+The current mainline version of Pomodoro is **fully native Swift (macOS)**.
 
-```bash
-python3 history/ui-tkinter-0.4.x/pomodoro.py
-```
+---
 
-The stats file format remains the same (`backend/pomodoro_data.json`).
+### Legacy System A — Tauri + Svelte + Python (0.5.x – 0.7.x)
 
-### Migration note
+This version introduced a modern desktop architecture before the move to native Swift.
 
-- The Svelte + Tauri frontend is now the primary UI, and the Python backend provides timer/state/stats over a JSON IPC bridge.
-- The Tkinter UI was preserved under `history/ui-tkinter-0.4.x` for rollback.
+**Stack**
+- Frontend: Svelte
+- Desktop shell: Tauri
+- Backend: Python (Pomodoro engine)
+- IPC: JSON-based bridge between frontend and backend
+
+**Reason for deprecation**
+While functional, this architecture:
+- Added unnecessary complexity on macOS
+- Limited deep system integration
+- Did not fully match macOS performance and UX expectations
+
+The project has since migrated to **native Swift** for clarity, performance, and long-term maintainability.
+
+---
+
+### Legacy System B — Python + Tkinter UI (≤ 0.4.x)
+
+This was the **original prototype** used during the earliest stages of development.
+
+**Stack**
+- Python
+- Tkinter UI
+- Single-process desktop app
 
 ## 🏗️ Working on
 

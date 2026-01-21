@@ -2,6 +2,8 @@ import SwiftUI
 
 struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
+    @State private var selectedItem: SidebarItem? = .pomodoro
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         ZStack {
@@ -13,17 +15,18 @@ struct MainWindowView: View {
             VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
                 .ignoresSafeArea()
 
-            VStack(spacing: 16) {
-                Text("Pomodoro")
-                    .font(.largeTitle)
-                Text("Ready to focus.")
-                    .foregroundStyle(.secondary)
-                CountdownTimerView()
-                MediaControlBar()
-                DebugStateView()
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                sidebar
+            } detail: {
+                detail(for: selectedItem ?? .pomodoro)
             }
-            .frame(minWidth: 480, minHeight: 320)
-            .padding(32)
+            .navigationSplitViewStyle(.balanced)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+            .onChange(of: columnVisibility) { newValue in
+                if newValue != .all {
+                    columnVisibility = .all
+                }
+            }
         }
         .background(WindowBackgroundConfigurator())
         .task {
@@ -32,6 +35,150 @@ struct MainWindowView: View {
             print("[MainWindowView] First render complete, connecting to system media")
             #endif
             appState.systemMedia.connect()
+        }
+    }
+
+    private var sidebar: some View {
+        List(selection: $selectedItem) {
+            ForEach(SidebarItem.allCases) { item in
+                Label(item.title, systemImage: item.systemImage)
+                    .tag(item as SidebarItem?)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    @ViewBuilder
+    private func detail(for item: SidebarItem) -> some View {
+        switch item {
+        case .pomodoro:
+            pomodoroView
+        case .countdown:
+            countdownView
+        case .audioMusic:
+            audioMusicView
+        case .summary:
+            summaryView
+        case .settings:
+            settingsView
+        }
+    }
+
+    private var pomodoroView: some View {
+        VStack(spacing: 16) {
+            Text("Pomodoro")
+                .font(.largeTitle)
+            Text("Ready to focus.")
+                .foregroundStyle(.secondary)
+            CountdownTimerView()
+            MediaControlBar()
+            DebugStateView()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(minWidth: 520, minHeight: 360)
+        .padding(32)
+    }
+
+    private var countdownView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Countdown")
+                .font(.largeTitle)
+            Text("One-off timers for tasks that do not need full Pomodoro cycles.")
+                .foregroundStyle(.secondary)
+            CountdownTimerView()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(32)
+    }
+
+    private var audioMusicView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Audio & Music")
+                .font(.largeTitle)
+            Text("Control what's playing while you work.")
+                .foregroundStyle(.secondary)
+            MediaControlBar()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(32)
+    }
+
+    private var summaryView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Summary")
+                .font(.largeTitle)
+            Text("Session state and diagnostics.")
+                .foregroundStyle(.secondary)
+            DebugStateView()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(32)
+    }
+
+    private var settingsView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Settings")
+                .font(.largeTitle)
+            Text("Customize your focus experience.")
+                .foregroundStyle(.secondary)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary.opacity(0.2))
+                .frame(height: 140)
+                .overlay(
+                    VStack(spacing: 6) {
+                        Image(systemName: "gear")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                        Text("Settings coming soon")
+                            .foregroundStyle(.secondary)
+                    }
+                )
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(32)
+    }
+
+    private enum SidebarItem: String, CaseIterable, Identifiable {
+        case pomodoro
+        case countdown
+        case audioMusic
+        case summary
+        case settings
+
+        var id: SidebarItem { self }
+
+        var title: String {
+            switch self {
+            case .pomodoro:
+                return "Pomodoro"
+            case .countdown:
+                return "Countdown"
+            case .audioMusic:
+                return "Audio & Music"
+            case .summary:
+                return "Summary"
+            case .settings:
+                return "Settings"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .pomodoro:
+                return "timer"
+            case .countdown:
+                return "hourglass"
+            case .audioMusic:
+                return "music.note.list"
+            case .summary:
+                return "chart.bar"
+            case .settings:
+                return "gearshape"
+            }
         }
     }
 }

@@ -153,6 +153,8 @@ Pomodoro has gone through multiple architectural stages during its development.
 All previous implementations are preserved **for reference only** and are no longer
 part of the active product direction.
 
+Legacy see: https://github.com/T-1234567890/Pomodoro-legacy
+
 **Status**
 - ❌ Deprecated
 - ❌ Prototype only

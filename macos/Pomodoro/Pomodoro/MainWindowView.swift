@@ -11,6 +11,7 @@ import SwiftUI
 
 struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var onboardingState: OnboardingState
     @EnvironmentObject private var musicController: MusicController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workMinutesText = ""
@@ -22,6 +23,10 @@ struct MainWindowView: View {
     @State private var sidebarSelection: SidebarItem = .pomodoro
     @State private var pomodoroStatePulse = false
     @State private var countdownStatePulse = false
+    @State private var calendarStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .event)
+    @State private var remindersStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .reminder)
+    @State private var calendarRequestInFlight = false
+    @State private var remindersRequestInFlight = false
     private let eventStore = EKEventStore()
 
     var body: some View {
@@ -47,7 +52,7 @@ struct MainWindowView: View {
                 syncDurationTexts()
                 syncLongBreakInterval()
             }
-            .onChange(of: appState.durationConfig) { _ in
+            .onChange(of: appState.durationConfig) { _, _ in
                 syncDurationTexts()
                 syncLongBreakInterval()
             }
@@ -383,15 +388,27 @@ struct MainWindowView: View {
                 }
 
                 HStack(spacing: 12) {
-                    Button("Get Calendar Access") {
+                    Button(calendarRequestInFlight ? "Requesting…" : "Get Calendar Access") {
                         requestCalendarAccess()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(calendarRequestInFlight)
 
-                    Button("Get Reminders Access") {
+                    Button(remindersRequestInFlight ? "Requesting…" : "Get Reminders Access") {
                         requestRemindersAccess()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(remindersRequestInFlight)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    permissionStatusRow(title: "Calendar", status: calendarStatus)
+                    permissionStatusRow(title: "Reminders", status: remindersStatus)
+                    if calendarStatus == .denied || calendarStatus == .restricted || remindersStatus == .denied || remindersStatus == .restricted {
+                        Text("Access denied or restricted. You can change this later in Privacy settings.")
+                            .font(.system(.footnote, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -421,11 +438,63 @@ struct MainWindowView: View {
     }
 
     private func requestCalendarAccess() {
-        eventStore.requestAccess(to: .event) { _, _ in }
+        calendarRequestInFlight = true
+        let completion: () -> Void = {
+            DispatchQueue.main.async {
+                self.calendarStatus = EKEventStore.authorizationStatus(for: .event)
+                self.calendarRequestInFlight = false
+                onboardingState.markEventKitRequestCalled()
+            }
+        }
+
+        if #available(macOS 14, *) {
+            eventStore.requestFullAccessToEvents { _, _ in completion() }
+        } else {
+            eventStore.requestAccess(to: .event) { _, _ in completion() }
+        }
     }
 
     private func requestRemindersAccess() {
-        eventStore.requestAccess(to: .reminder) { _, _ in }
+        remindersRequestInFlight = true
+        let completion: () -> Void = {
+            DispatchQueue.main.async {
+                self.remindersStatus = EKEventStore.authorizationStatus(for: .reminder)
+                self.remindersRequestInFlight = false
+                onboardingState.markEventKitRequestCalled()
+            }
+        }
+
+        if #available(macOS 14, *) {
+            eventStore.requestFullAccessToReminders { _, _ in completion() }
+        } else {
+            eventStore.requestAccess(to: .reminder) { _, _ in completion() }
+        }
+    }
+
+    private func permissionStatusRow(title: String, status: EKAuthorizationStatus) -> some View {
+        let text: String
+        let color: Color
+        switch status {
+        case .authorized:
+            text = "\(title): Enabled"
+            color = .green
+        case .denied, .restricted:
+            text = "\(title): Denied"
+            color = .red
+        case .notDetermined:
+            text = "\(title): Not requested"
+            color = .orange
+        @unknown default:
+            text = "\(title): Unknown"
+            color = .gray
+        }
+        return HStack(spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private enum DurationField: Hashable {

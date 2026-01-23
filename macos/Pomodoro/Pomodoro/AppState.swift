@@ -400,10 +400,18 @@ final class AppState: ObservableObject {
         let reminderStatus = EKEventStore.authorizationStatus(for: .reminder)
 
         if calendarStatus == .notDetermined {
-            _ = try? await eventStore.requestAccess(to: .event)
+            if #available(macOS 14, *) {
+                _ = try? await eventStore.requestFullAccessToEvents()
+            } else {
+                _ = try? await eventStore.requestAccess(to: .event)
+            }
         }
         if reminderStatus == .notDetermined {
-            _ = try? await eventStore.requestAccess(to: .reminder)
+            if #available(macOS 14, *) {
+                _ = try? await eventStore.requestFullAccessToReminders()
+            } else {
+                _ = try? await eventStore.requestAccess(to: .reminder)
+            }
         }
     }
 

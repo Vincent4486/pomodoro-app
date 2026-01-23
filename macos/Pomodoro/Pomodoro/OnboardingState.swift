@@ -12,6 +12,7 @@ final class OnboardingState: ObservableObject {
     @Published var isPresented: Bool
     @Published var needsSystemPermissions: Bool
     @Published var needsMenuBarTip: Bool
+    @Published var eventKitRequestCalled: Bool
 
     private let userDefaults: UserDefaults
 
@@ -20,21 +21,25 @@ final class OnboardingState: ObservableObject {
         let completed = userDefaults.bool(forKey: DefaultsKey.onboardingCompleted)
         let permissionsPrompted = userDefaults.bool(forKey: DefaultsKey.calendarPermissionsPrompted)
         let menuTipSeen = userDefaults.bool(forKey: DefaultsKey.menuBarTipSeen)
+        let requestCalled = userDefaults.bool(forKey: DefaultsKey.eventKitRequestCalled)
 
         let needsSystemPermissions = !permissionsPrompted
         let needsMenuBarTip = !menuTipSeen
 
         self.needsSystemPermissions = needsSystemPermissions
         self.needsMenuBarTip = needsMenuBarTip
-        self.isPresented = !completed || needsSystemPermissions || needsMenuBarTip
+        self.eventKitRequestCalled = requestCalled
+        self.isPresented = !completed || needsSystemPermissions || needsMenuBarTip || !requestCalled
     }
 
     func markCompleted() {
         userDefaults.set(true, forKey: DefaultsKey.onboardingCompleted)
         userDefaults.set(true, forKey: DefaultsKey.calendarPermissionsPrompted)
         userDefaults.set(true, forKey: DefaultsKey.menuBarTipSeen)
+        userDefaults.set(true, forKey: DefaultsKey.eventKitRequestCalled)
         needsSystemPermissions = false
         needsMenuBarTip = false
+        eventKitRequestCalled = true
         isPresented = false
     }
 
@@ -52,9 +57,15 @@ final class OnboardingState: ObservableObject {
         userDefaults.set(true, forKey: DefaultsKey.menuBarTipSeen)
     }
 
+    func markEventKitRequestCalled() {
+        eventKitRequestCalled = true
+        userDefaults.set(true, forKey: DefaultsKey.eventKitRequestCalled)
+    }
+
     private enum DefaultsKey {
         static let onboardingCompleted = "onboarding.completed"
         static let calendarPermissionsPrompted = "onboarding.calendarPermissionsPrompted"
         static let menuBarTipSeen = "onboarding.menuBarTipSeen"
+        static let eventKitRequestCalled = "onboarding.eventKitRequestCalled"
     }
 }

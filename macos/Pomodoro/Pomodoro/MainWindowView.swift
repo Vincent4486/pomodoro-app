@@ -5,12 +5,13 @@
 //  Created by Zhengyang Hu on 1/15/26.
 //
 
+import AppKit
+import EventKit
 import SwiftUI
 
 struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var musicController: MusicController
-    @EnvironmentObject private var onboardingState: OnboardingState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workMinutesText = ""
     @State private var shortBreakMinutesText = ""
@@ -21,6 +22,7 @@ struct MainWindowView: View {
     @State private var sidebarSelection: SidebarItem = .pomodoro
     @State private var pomodoroStatePulse = false
     @State private var countdownStatePulse = false
+    private let eventStore = EKEventStore()
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -336,14 +338,34 @@ struct MainWindowView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Setup")
+                Text("Quick Actions")
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(.secondary)
-                Button("Open Onboarding") {
-                    onboardingState.reopen()
+                HStack(spacing: 12) {
+                    Button("Request Notifications") {
+                        appState.requestSystemNotificationAuthorization { _ in }
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Open Notification Settings") {
+                        openNotificationSettings()
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
+
+                HStack(spacing: 12) {
+                    Button("Get Calendar Access") {
+                        requestCalendarAccess()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Get Reminders Access") {
+                        requestRemindersAccess()
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
+
         }
         .padding(.top, 28)
         .padding(.horizontal)
@@ -362,6 +384,19 @@ struct MainWindowView: View {
                 }
             }
         )
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func requestCalendarAccess() {
+        eventStore.requestAccess(to: .event) { _, _ in }
+    }
+
+    private func requestRemindersAccess() {
+        eventStore.requestAccess(to: .reminder) { _, _ in }
     }
 
     private enum DurationField: Hashable {

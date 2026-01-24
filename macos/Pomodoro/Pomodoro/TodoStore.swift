@@ -11,9 +11,15 @@ final class TodoStore: ObservableObject {
     private let storageKey = "com.pomodoro.todoItems"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private weak var planningStore: PlanningStore?
     
     init() {
         loadItems()
+    }
+
+    func attachPlanningStore(_ store: PlanningStore) {
+        planningStore = store
+        planningStore?.syncTasks(items)
     }
     
     // MARK: - CRUD Operations
@@ -21,18 +27,21 @@ final class TodoStore: ObservableObject {
     func addItem(_ item: TodoItem) {
         items.append(item)
         saveItems()
+        planningStore?.upsertFromTask(item)
     }
     
     func updateItem(_ item: TodoItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index] = item
             saveItems()
+            planningStore?.upsertFromTask(item)
         }
     }
     
     func deleteItem(_ item: TodoItem) {
         items.removeAll { $0.id == item.id }
         saveItems()
+        planningStore?.removeTaskPlan(for: item.id)
     }
     
     func deleteItems(at offsets: IndexSet) {
@@ -46,6 +55,7 @@ final class TodoStore: ObservableObject {
             updatedItem.markComplete(!updatedItem.isCompleted)
             items[index] = updatedItem
             saveItems()
+            planningStore?.upsertFromTask(updatedItem)
         }
     }
     
@@ -75,6 +85,7 @@ final class TodoStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let decoded = try? decoder.decode([TodoItem].self, from: data) {
             items = decoded
+            planningStore?.syncTasks(items)
         }
     }
     

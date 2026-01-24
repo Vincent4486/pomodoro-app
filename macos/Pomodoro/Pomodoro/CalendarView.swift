@@ -25,6 +25,12 @@ struct CalendarView: View {
         formatter.locale = .autoupdatingCurrent
         return formatter
     }()
+
+    private static let shortDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, MMM d"
+        return formatter
+    }()
     
     enum ViewType {
         case day
@@ -76,59 +82,57 @@ struct CalendarView: View {
     }
     
     private var authorizedContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            VStack(spacing: 8) {
-                Text("Calendar")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-                Text("Your time-based events and schedules")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 32)
-            
-            // View selector + date anchor + add button
-            HStack(spacing: 12) {
-                Picker("View", selection: $selectedView) {
-                    Text("Day").tag(ViewType.day)
-                    Text("Week").tag(ViewType.week)
-                    Text("Month").tag(ViewType.month)
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 260)
-                .onChange(of: selectedView) { _, _ in
-                    Task { await loadEvents() }
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Calendar")
+                        .font(.largeTitle)
+                        .fontWeight(.semibold)
+                    Text("Your time-based events and schedules")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 
-                DatePicker(
-                    "",
-                    selection: $anchorDate,
-                    displayedComponents: .date
-                )
-                .labelsHidden()
-                .datePickerStyle(.field)
-                .onChange(of: anchorDate) { _, _ in
-                    Task { await loadEvents() }
+                HStack(spacing: 12) {
+                    Picker("View", selection: $selectedView) {
+                        Text("Day").tag(ViewType.day)
+                        Text("Week").tag(ViewType.week)
+                        Text("Month").tag(ViewType.month)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                    .onChange(of: selectedView) { _, _ in
+                        Task { await loadEvents() }
+                    }
+                    
+                    DatePicker(
+                        "",
+                        selection: $anchorDate,
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.field)
+                    .onChange(of: anchorDate) { _, _ in
+                        Task { await loadEvents() }
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        prepareNewEventDefaults()
+                        showingAddEvent = true
+                    } label: {
+                        Label("Add Event", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    
+                    Button {
+                        Task { await loadEvents() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
                 }
-                
-                Spacer()
-                
-                Button {
-                    prepareNewEventDefaults()
-                    showingAddEvent = true
-                } label: {
-                    Label("Add Event", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                
-                Button {
-                    Task { await loadEvents() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
             }
             
             // Events list constrained to the available detail height
@@ -205,7 +209,12 @@ struct CalendarView: View {
             case .day:
                 dayContent(maxWidth: maxWidth)
             case .week:
-                weekContent(maxWidth: maxWidth)
+                WeekCalendarView(
+                    days: daysInWeek(from: anchorDate),
+                    events: calendarManager.events,
+                    tasks: todoStore.items
+                )
+                .frame(maxWidth: maxWidth, alignment: .leading)
             case .month:
                 monthContent(maxWidth: maxWidth)
             }
@@ -214,23 +223,12 @@ struct CalendarView: View {
     
     @ViewBuilder
     private func dayContent(maxWidth: CGFloat) -> some View {
-        CalendarDayView(
-            date: anchorDate,
-            events: events(for: anchorDate)
-        )
-        .frame(maxWidth: maxWidth, alignment: .leading)
-        .padding(.horizontal, 8)
-    }
-    
-    @ViewBuilder
-    private func weekContent(maxWidth: CGFloat) -> some View {
-        let start = daysInWeek(from: anchorDate).first ?? anchorDate
-        CalendarWeekView(
-            startOfWeek: start,
-            events: calendarManager.events
-        )
-        .frame(maxWidth: maxWidth, alignment: .leading)
-        .padding(.horizontal, 8)
+        VStack(alignment: .leading, spacing: 12) {
+            daySummary
+            dayBlocks
+        }
+        .frame(maxWidth: maxWidth, alignment: Alignment.leading)
+        .padding(Edge.Set.horizontal, 8)
     }
     
     @ViewBuilder
@@ -242,28 +240,12 @@ struct CalendarView: View {
         .frame(maxWidth: maxWidth, alignment: .leading)
     }
     
-    private func events(for day: Date) -> [EKEvent] {
-        let calendar = Calendar.current
-        return calendarManager.events.filter { event in
-            calendar.isDate(event.startDate, inSameDayAs: day)
-        }
-    }
-    
-    private func eventsGroupedByDay(for days: [Date]) -> [Date: [EKEvent]] {
-        var dict: [Date: [EKEvent]] = [:]
-        let calendar = Calendar.current
-        for event in calendarManager.events {
-            if let match = days.first(where: { calendar.isDate(event.startDate, inSameDayAs: $0) }) {
-                dict[match, default: []].append(event)
-            }
-        }
-        return dict
-    }
-    
     private func daysInWeek(from date: Date) -> [Date] {
         var days: [Date] = []
         let calendar = Calendar.current
-        guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)) else {
+        let startOfDay = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: startOfDay)
+        guard let startOfWeek = calendar.date(byAdding: .day, value: -(weekday - 1), to: startOfDay) else {
             return days
         }
         for offset in 0..<7 {
@@ -282,6 +264,153 @@ struct CalendarView: View {
             await calendarManager.fetchWeekEvents(containing: anchorDate)
         case .month:
             await calendarManager.fetchMonthEvents(containing: anchorDate)
+        }
+    }
+
+    private func formatEventTime(_ event: EKEvent) -> String {
+        if event.isAllDay {
+            return "All day"
+        }
+        let start = Self.eventTimeFormatter.string(from: event.startDate)
+        let end = Self.eventTimeFormatter.string(from: event.endDate)
+        return "\(start) - \(end)"
+    }
+
+    // MARK: - Day helpers
+
+    private var daySummary: some View {
+        let todayEvents = events(for: anchorDate)
+        let todayTasks = tasks(for: anchorDate)
+        let totalMinutes = todayEvents.reduce(0) { partial, event in
+            partial + max(0, Int(event.endDate.timeIntervalSince(event.startDate) / 60))
+        }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Today Summary")
+                .font(.headline)
+            HStack(spacing: 12) {
+                summaryPill(title: "Blocks", value: "\(todayEvents.count)")
+                summaryPill(title: "Tasks", value: "\(todayTasks.count)")
+                summaryPill(title: "Planned mins", value: "\(totalMinutes)")
+            }
+        }
+    }
+
+    private var dayBlocks: some View {
+        let todayEvents = events(for: anchorDate)
+        let todayTasks = tasks(for: anchorDate)
+
+        return ScrollView {
+            if todayEvents.isEmpty && todayTasks.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.secondary)
+                    Text("No blocks today")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(32)
+            } else {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if !todayEvents.isEmpty {
+                        Text("Time Blocks")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        ForEach(todayEvents, id: \.eventIdentifier) { event in
+                            blockCard(event)
+                        }
+                    }
+
+                    if !todayTasks.isEmpty {
+                        Text("Tasks")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        ForEach(todayTasks) { task in
+                            taskCard(task)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: 360, alignment: .top)
+    }
+
+    // MARK: - Card builders
+
+    private func blockCard(_ event: EKEvent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(event.title ?? "Untitled")
+                .font(.headline)
+            Text(formatEventTime(event))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            if let calendar = event.calendar {
+                Text(calendar.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(8)
+    }
+
+    private func taskCard(_ item: TodoItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.title)
+                .font(.headline)
+                .strikethrough(item.isCompleted)
+            if let notes = item.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let due = item.dueDate {
+                Text(Self.shortDayFormatter.string(from: due))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.04))
+        .cornerRadius(8)
+    }
+
+    private func summaryPill(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(10)
+    }
+
+    // MARK: - Data helpers
+
+    private func events(for day: Date) -> [EKEvent] {
+        let calendar = Calendar.current
+        return calendarManager.events
+            .filter { calendar.isDate($0.startDate, inSameDayAs: day) }
+            .sorted { $0.startDate < $1.startDate }
+    }
+
+    private func tasks(for day: Date) -> [TodoItem] {
+        let calendar = Calendar.current
+        return todoStore.items.filter { item in
+            if let due = item.dueDate {
+                return calendar.isDate(due, inSameDayAs: day)
+            }
+            return false
         }
     }
     

@@ -38,8 +38,10 @@
 		B6A200172FFD4BD7B90F8AC1 /* OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A200092FFD4BD7B90F8AC1 /* OnboardingState.swift */; };
 		B6A200182FFD4BD7B90F8AC1 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */; };
 		C9E56B409BCB40FCA8485A09 /* LocalMediaPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F639B95E5345199E439834 /* LocalMediaPlayer.swift */; };
-		CC366ABE14C2BUILD3DDDB2A /* CalendarWeekView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC366ABE14C245B3A3DDDB2A /* CalendarWeekView.swift */; };
+		9F1C2A3B4D5E6F708192A3B5 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F1C2A3B4D5E6F708192A3B4 /* WeekCalendarView.swift */; };
 		D0495D48D1B5BUILDBDA97DE /* CalendarMonthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0495D48D1B544D0ABDA97DE /* CalendarMonthView.swift */; };
+		PLANNING001 /* PlanningItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = PLANNING000 /* PlanningItem.swift */; };
+		PLANNING003 /* PlanningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = PLANNING002 /* PlanningStore.swift */; };
 		D1A1B0010000000000000001 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0020000000000000001 /* PermissionsManager.swift */; };
 		D1A1B0030000000000000001 /* CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0040000000000000001 /* CalendarManager.swift */; };
 		D1A1B0050000000000000001 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0060000000000000001 /* CalendarView.swift */; };
@@ -82,12 +84,16 @@
 		B6A200042FFD4BD7B90F8AC1 /* AppleMusicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicProvider.swift; sourceTree = "<group>"; };
 		B6A200052FFD4BD7B90F8AC1 /* SpotifyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyProvider.swift; sourceTree = "<group>"; };
 		B6A200062FFD4BD7B90F8AC1 /* QQMusicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QQMusicProvider.swift; sourceTree = "<group>"; };
+		PLANNING000 /* PlanningItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningItem.swift; sourceTree = "<group>"; };
+		PLANNING002 /* PlanningStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningStore.swift; sourceTree = "<group>"; };
 		B6A200072FFD4BD7B90F8AC1 /* AppleScriptRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleScriptRunner.swift; sourceTree = "<group>"; };
 		B6A200082FFD4BD7B90F8AC1 /* LocalMusicPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMusicPlayer.swift; sourceTree = "<group>"; };
 		B6A200092FFD4BD7B90F8AC1 /* OnboardingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingState.swift; sourceTree = "<group>"; };
 		B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		C67603580DB6C7C7A08CA894 /* AmbientNoiseEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientNoiseEngine.swift; sourceTree = "<group>"; };
-		CC366ABE14C245B3A3DDDB2A /* CalendarWeekView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarWeekView.swift; sourceTree = "<group>"; };
+		9F1C2A3B4D5E6F708192A3B4 /* WeekCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarView.swift; sourceTree = "<group>"; };
+		PLANNING000 /* PlanningItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningItem.swift; sourceTree = "<group>"; };
+		PLANNING002 /* PlanningStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanningStore.swift; sourceTree = "<group>"; };
 		D0495D48D1B544D0ABDA97DE /* CalendarMonthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarMonthView.swift; sourceTree = "<group>"; };
 		D1A1B0020000000000000001 /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		D1A1B0040000000000000001 /* CalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarManager.swift; sourceTree = "<group>"; };
@@ -164,6 +170,8 @@
 				D1A1B0040000000000000001 /* CalendarManager.swift */,
 				D1A1B0080000000000000001 /* TodoItem.swift */,
 				D1A1B00A0000000000000001 /* TodoStore.swift */,
+				PLANNING000 /* PlanningItem.swift */,
+				PLANNING002 /* PlanningStore.swift */,
 				D1A1B00E0000000000000001 /* RemindersSync.swift */,
 			);
 			name = State;
@@ -190,7 +198,7 @@
 				B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */,
 				D1A1B0060000000000000001 /* CalendarView.swift */,
 				4BDE965F88F54754BCBB5DF2 /* CalendarDayView.swift */,
-				CC366ABE14C245B3A3DDDB2A /* CalendarWeekView.swift */,
+				9F1C2A3B4D5E6F708192A3B4 /* WeekCalendarView.swift */,
 				D0495D48D1B544D0ABDA97DE /* CalendarMonthView.swift */,
 				D1A1B00C0000000000000001 /* TodoListView.swift */,
 				D1A1B0100000000000000001 /* SettingsPermissionsView.swift */,
@@ -330,8 +338,10 @@
 				D1A1B0010000000000000001 /* PermissionsManager.swift in Sources */,
 				D1A1B0030000000000000001 /* CalendarManager.swift in Sources */,
 				D1A1B0050000000000000001 /* CalendarView.swift in Sources */,
+				PLANNING001 /* PlanningItem.swift in Sources */,
+				PLANNING003 /* PlanningStore.swift in Sources */,
 				4BDE965F88F5BUILDCBB5DF2 /* CalendarDayView.swift in Sources */,
-				CC366ABE14C2BUILD3DDDB2A /* CalendarWeekView.swift in Sources */,
+				9F1C2A3B4D5E6F708192A3B5 /* WeekCalendarView.swift in Sources */,
 				D0495D48D1B5BUILDBDA97DE /* CalendarMonthView.swift in Sources */,
 				D1A1B0070000000000000001 /* TodoItem.swift in Sources */,
 				D1A1B0090000000000000001 /* TodoStore.swift in Sources */,

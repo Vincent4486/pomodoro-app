@@ -1,7 +1,7 @@
-# 🍅 Pomodoro Timer 
+# 🍅 Pomodoro App
 **Plan. Focus. Done.**
 
-**Pomodoro Timer** is a modern, distraction-free Pomodoro & focus timer designed for macOS.  
+**Pomodoro App** is a modern, distraction-free Pomodoro & focus timer designed for macOS.  
 It features session presets, long-break cycles, productivity summaries, ambient audio, and a macOS-inspired **glass / liquid glass UI**.
 
 Version **1.0.0** marks the first stable milestone after extensive UI, architecture, and workflow refinement.

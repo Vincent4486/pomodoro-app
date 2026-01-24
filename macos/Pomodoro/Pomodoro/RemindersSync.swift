@@ -30,9 +30,7 @@ final class RemindersSync: ObservableObject {
     
     /// Sync a single task to Reminders or Calendar (one-way, task is source of truth)
     func syncTask(_ item: TodoItem) async throws {
-        guard isSyncAvailable else {
-            throw SyncError.notAuthorized
-        }
+        try await ensureAccess()
         
         isSyncing = true
         defer { isSyncing = false }
@@ -48,8 +46,11 @@ final class RemindersSync: ObservableObject {
     
     /// One-way sync for all tasks (create/update only, never delete)
     func syncAllTasks() async {
-        guard isSyncAvailable else {
-            lastSyncError = SyncError.notAuthorized.localizedDescription
+        print("SYNC START")
+        do {
+            try await ensureAccess()
+        } catch {
+            lastSyncError = error.localizedDescription
             return
         }
         guard let store = todoStore else { return }
@@ -57,6 +58,10 @@ final class RemindersSync: ObservableObject {
         isSyncing = true
         defer { isSyncing = false }
         
+        // Pull from Reminders first
+        await pullRemindersIntoStore()
+        
+        // Push all tasks to Reminders/Calendar
         for item in store.items {
             do {
                 try await syncSingleItem(item)
@@ -64,7 +69,14 @@ final class RemindersSync: ObservableObject {
                 lastSyncError = error.localizedDescription
             }
         }
+        
+        // Remove tasks whose reminder no longer exists
+        await pruneDeletedReminders()
+        
         lastSyncDate = Date()
+        DispatchQueue.main.async {
+            self.todoStore?.objectWillChange.send()
+        }
     }
     
     /// Remove Reminder link (does not delete remote)
@@ -108,6 +120,79 @@ final class RemindersSync: ObservableObject {
                 todoStore?.linkToReminder(itemId: item.id, remindersId: reminderId)
             }
         }
+    }
+    
+    private func ensureAccess() async throws {
+        if permissionsManager.isRemindersAuthorized { return }
+        let granted: Bool = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
+            eventStore.requestAccess(to: .reminder) { granted, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+        if !granted {
+            throw SyncError.notAuthorized
+        }
+        permissionsManager.refreshRemindersStatus()
+    }
+    
+    private func fetchAllReminders() async -> [EKReminder] {
+        let predicate = eventStore.predicateForReminders(in: nil)
+        return await withCheckedContinuation { continuation in
+            eventStore.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: reminders ?? [])
+            }
+        }
+    }
+    
+    private func pullRemindersIntoStore() async {
+        guard let store = todoStore else { return }
+        let reminders = await fetchAllReminders()
+        
+        for reminder in reminders {
+            let id = reminder.calendarItemIdentifier
+            if var existing = store.items.first(where: { $0.reminderIdentifier == id }) {
+                existing.title = reminder.title
+                existing.notes = reminder.notes
+                existing.isCompleted = reminder.isCompleted
+                if let comps = reminder.dueDateComponents,
+                   let date = Calendar.current.date(from: comps) {
+                    existing.dueDate = date
+                }
+                existing.syncStatus = .synced
+                store.updateItem(existing)
+            } else {
+                let newTask = TodoItem(
+                    title: reminder.title,
+                    notes: reminder.notes,
+                    isCompleted: reminder.isCompleted,
+                    dueDate: reminder.dueDateComponents.flatMap { Calendar.current.date(from: $0) },
+                    durationMinutes: nil,
+                    priority: .none,
+                    tags: [],
+                    reminderIdentifier: id,
+                    calendarEventIdentifier: nil,
+                    syncStatus: .synced
+                )
+                store.addItem(newTask)
+            }
+        }
+    }
+    
+    private func pruneDeletedReminders() async {
+        guard let store = todoStore else { return }
+        let reminders = await fetchAllReminders()
+        let existingIDs = Set(reminders.compactMap { $0.calendarItemIdentifier })
+        let toDelete = store.items.filter { item in
+            if let reminderId = item.reminderIdentifier {
+                return !existingIDs.contains(reminderId)
+            }
+            return false
+        }
+        toDelete.forEach { store.deleteItem($0) }
     }
     
     private func createReminder(from item: TodoItem) async throws -> String {

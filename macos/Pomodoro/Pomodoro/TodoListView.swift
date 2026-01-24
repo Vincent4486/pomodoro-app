@@ -14,7 +14,14 @@ struct TodoListView: View {
     @State private var tagsField = ""
     @State private var dueDateEnabled = false
     @State private var dueDateField = Date()
-    @State private var showCompleted = true
+    @State private var selectedSegment: Segment = .active
+    
+    private enum Segment: String, CaseIterable, Identifiable {
+        case active = "Active"
+        case completed = "Completed"
+        
+        var id: String { rawValue }
+    }
     
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -79,10 +86,12 @@ struct TodoListView: View {
                 
                 Spacer()
                 
-                Toggle(isOn: $showCompleted) {
-                    Text("Show Completed")
+                Picker("", selection: $selectedSegment) {
+                    Text("Active").tag(Segment.active)
+                    Text("Completed").tag(Segment.completed)
                 }
-                .toggleStyle(.switch)
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 12)
@@ -92,6 +101,9 @@ struct TodoListView: View {
                     Text("Last sync: \(Self.lastSyncFormatter.string(from: last))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Toggle("Auto-sync", isOn: $remindersSync.isAutoSyncEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                     Spacer()
                 }
                 .padding(.horizontal, 32)
@@ -108,6 +120,8 @@ struct TodoListView: View {
                     LazyVStack(spacing: 8) {
                         ForEach(filteredItems) { item in
                             todoRow(item)
+                                .opacity(selectedSegment == .completed ? 0.9 : 1.0)
+                                .allowsHitTesting(selectedSegment == .completed ? false : true)
                         }
                     }
                     .padding(16)
@@ -331,10 +345,11 @@ struct TodoListView: View {
     }
     
     private var filteredItems: [TodoItem] {
-        if showCompleted {
-            return todoStore.items
-        } else {
+        switch selectedSegment {
+        case .active:
             return todoStore.pendingItems
+        case .completed:
+            return todoStore.completedItems
         }
     }
     

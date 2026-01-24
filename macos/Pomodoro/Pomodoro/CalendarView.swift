@@ -224,11 +224,10 @@ struct CalendarView: View {
     
     @ViewBuilder
     private func weekContent(maxWidth: CGFloat) -> some View {
-        let days = daysInWeek(from: anchorDate)
-        
+        let start = daysInWeek(from: anchorDate).first ?? anchorDate
         CalendarWeekView(
-            days: days,
-            events: eventsGroupedByDay(for: days)
+            startOfWeek: start,
+            events: calendarManager.events
         )
         .frame(maxWidth: maxWidth, alignment: .leading)
         .padding(.horizontal, 8)

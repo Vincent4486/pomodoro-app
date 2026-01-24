@@ -1,141 +1,132 @@
 import SwiftUI
 import EventKit
 
-/// Week view for the calendar showing a 7-day grid with hour rows.
-/// Each day column displays events positioned by their start time.
+/// Week calendar laid out in 7 side-by-side day cards.
 struct CalendarWeekView: View {
-    let days: [Date]
-    let events: [Date: [EKEvent]]
+    let startOfWeek: Date
+    let events: [EKEvent]
     
-    // Height estimates for scroll calculation
-    private let estimatedRowHeight: CGFloat = 32
-    private let estimatedHeaderHeight: CGFloat = 28
-    private let estimatedPadding: CGFloat = 16
-    private let estimatedDividerHeight: CGFloat = 0.5
+    private let calendar = Calendar.current
+    
+    private var days: [Date] {
+        guard let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: startOfWeek)) else {
+            return []
+        }
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+    }
     
     var body: some View {
-        GeometryReader { geometry in
-            let availableHeight = geometry.size.height
-            let contentHeight = calculateContentHeight()
-            let needsScrolling = contentHeight > availableHeight
-            
-            if needsScrolling {
-                ScrollView {
-                    weekContent
+        GeometryReader { proxy in
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(days, id: \.self) { day in
+                    dayColumn(for: day, availableHeight: proxy.size.height)
                 }
-            } else {
-                VStack(spacing: 0) {
-                    weekContent
-                    Spacer(minLength: 0)
-                }
-                .frame(maxHeight: .infinity, alignment: .top)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
         }
     }
     
-    private var weekContent: some View {
-        LazyVStack(spacing: 0) {
-            header
-            Divider()
-            ForEach(0..<24, id: \.self) { hour in
-                HStack(alignment: .top, spacing: 8) {
-                    Text(hourLabel(hour))
+    @ViewBuilder
+    private func dayColumn(for day: Date, availableHeight: CGFloat) -> some View {
+        let dayEvents = eventsForDay(day)
+        let isToday = calendar.isDateInToday(day)
+        let dayName = weekdayString(day)
+        let dateLabel = dateString(day)
+        
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(dayName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .trailing)
-                    
-                    ForEach(days, id: \.self) { day in
-                        VStack(alignment: .leading, spacing: 4) {
-                            let hourEvents = eventsForHour(day: day, hour: hour)
-                            
-                            if hourEvents.isEmpty {
-                                Text(" ")
-                                    .font(.caption2)
-                            } else {
-                                ForEach(hourEvents, id: \.eventIdentifier) { event in
-                                    eventChip(event)
-                                }
-                            }
-                        }
+                    Text(dateLabel)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                }
+                Spacer()
+                if isToday {
+                    Text("Today")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                }
+            }
+            
+            Divider()
+                .opacity(0.35)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                if dayEvents.isEmpty {
+                    Text("No events")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(dayEvents, id: \.eventIdentifier) { event in
+                        eventRow(event)
                     }
                 }
-                .padding(.vertical, 6)
-                Divider()
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: availableHeight, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isToday ? Color.blue.opacity(0.08) : Color.primary.opacity(0.05))
+        )
+    }
+    
+    private func eventsForDay(_ day: Date) -> [EKEvent] {
+        events.filter { calendar.isDate($0.startDate, inSameDayAs: day) }
+            .sorted { $0.startDate < $1.startDate }
+    }
+    
+    @ViewBuilder
+    private func eventRow(_ event: EKEvent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color(cgColor: event.calendar.cgColor))
+                    .frame(width: 8, height: 8)
+                Text(event.title ?? "Untitled")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            Text(timeRange(event))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.06))
+        .cornerRadius(10)
     }
     
-    private func calculateContentHeight() -> CGFloat {
-        let hourRowsCount: CGFloat = 24
-        let dividersCount: CGFloat = 25 // 1 header divider + 24 hour dividers
-        
-        let totalHeight = estimatedHeaderHeight + 
-                         (hourRowsCount * estimatedRowHeight) + 
-                         (dividersCount * estimatedDividerHeight) + 
-                         estimatedPadding
-        
-        return totalHeight + 10
-    }
-    
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text("")
-                .frame(width: 44)
-            ForEach(days, id: \.self) { day in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(shortDayString(day))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(dayNumberString(day))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(.bottom, 4)
-    }
-    
-    private func eventsForHour(day: Date, hour: Int) -> [EKEvent] {
-        let calendar = Calendar.current
-        let dayEvents = events[day] ?? []
-        return dayEvents.filter {
-            calendar.component(.hour, from: $0.startDate) == hour
-        }
-    }
-    
-    private func hourLabel(_ hour: Int) -> String {
-        let date = Calendar.current.date(from: DateComponents(hour: hour)) ?? Date()
+    private func timeRange(_ event: EKEvent) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "ha"
-        return formatter.string(from: date)
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        if event.isAllDay {
+            return "All day"
+        }
+        return "\(formatter.string(from: event.startDate)) – \(formatter.string(from: event.endDate))"
     }
     
-    private func shortDayString(_ date: Date) -> String {
+    private func weekdayString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
         return formatter.string(from: date)
     }
     
-    private func dayNumberString(_ date: Date) -> String {
+    private func dateString(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "d"
+        formatter.dateFormat = "MMM d"
         return formatter.string(from: date)
-    }
-    
-    @ViewBuilder
-    private func eventChip(_ event: EKEvent) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(event.title ?? "Untitled")
-                .font(.caption2)
-                .fontWeight(.medium)
-                .lineLimit(1)
-        }
-        .padding(4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(cgColor: event.calendar.cgColor).opacity(0.15))
-        .cornerRadius(4)
     }
 }

@@ -447,8 +447,8 @@ struct TodoListView: View {
             todoStore.updateItem(editing)
             
             if permissionsManager.isRemindersAuthorized,
-               editing.remindersIdentifier != nil {
-                Task { try? await remindersSync.syncToReminders(editing) }
+               (editing.reminderIdentifier != nil || editing.calendarEventIdentifier != nil) {
+                Task { try? await remindersSync.syncTask(editing) }
             }
         } else {
             let newItem = TodoItem(
@@ -456,6 +456,7 @@ struct TodoListView: View {
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
                 isCompleted: false,
                 dueDate: dueDate,
+                durationMinutes: nil,
                 priority: .none,
                 tags: tags
             )

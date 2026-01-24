@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 /// TodoStore manages the app's primary task data.
 /// This is the source of truth for all tasks, whether synced with Reminders or not.

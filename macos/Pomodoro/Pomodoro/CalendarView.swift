@@ -8,6 +8,9 @@ struct CalendarView: View {
     @ObservedObject var permissionsManager: PermissionsManager
     
     @State private var selectedView: ViewType = .today
+
+    private let minSize = CGSize(width: 720, height: 520)
+    private let idealSize = CGSize(width: 840, height: 620)
     
     private static let eventTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -29,7 +32,16 @@ struct CalendarView: View {
                 unauthorizedContent
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Bound the view so it does not expand the window when switching tabs.
+        .frame(
+            minWidth: minSize.width,
+            idealWidth: idealSize.width,
+            maxWidth: 900,
+            minHeight: minSize.height,
+            idealHeight: idealSize.height,
+            maxHeight: 760,
+            alignment: .top
+        )
         .onAppear {
             permissionsManager.refreshCalendarStatus()
             if permissionsManager.isCalendarAuthorized {
@@ -97,11 +109,11 @@ struct CalendarView: View {
                     .padding(16)
                 }
             }
-            
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: 360, alignment: .top)
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 28)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
     
     private var unauthorizedContent: some View {
@@ -140,8 +152,8 @@ struct CalendarView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(48)
+        .frame(maxWidth: 520)
+        .padding(40)
     }
     
     @ViewBuilder

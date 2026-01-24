@@ -290,7 +290,7 @@ struct MainWindowView: View {
             remindersSync.setTodoStore(todoStore)
         }
     }
-    
+
     private var calendarView: some View {
         CalendarView(
             calendarManager: calendarManager,

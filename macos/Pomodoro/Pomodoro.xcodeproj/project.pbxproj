@@ -37,6 +37,14 @@
 		B6A200172FFD4BD7B90F8AC1 /* OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A200092FFD4BD7B90F8AC1 /* OnboardingState.swift */; };
 		B6A200182FFD4BD7B90F8AC1 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */; };
 		C9E56B409BCB40FCA8485A09 /* LocalMediaPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F639B95E5345199E439834 /* LocalMediaPlayer.swift */; };
+		D1A1B0010000000000000001 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0020000000000000001 /* PermissionsManager.swift */; };
+		D1A1B0030000000000000001 /* CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0040000000000000001 /* CalendarManager.swift */; };
+		D1A1B0050000000000000001 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0060000000000000001 /* CalendarView.swift */; };
+		D1A1B0070000000000000001 /* TodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0080000000000000001 /* TodoItem.swift */; };
+		D1A1B0090000000000000001 /* TodoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B00A0000000000000001 /* TodoStore.swift */; };
+		D1A1B00B0000000000000001 /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B00C0000000000000001 /* TodoListView.swift */; };
+		D1A1B00D0000000000000001 /* RemindersSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B00E0000000000000001 /* RemindersSync.swift */; };
+		D1A1B00F0000000000000001 /* SettingsPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0100000000000000001 /* SettingsPermissionsView.swift */; };
 		E7FB0168DAB22D17FF66223F /* AmbientNoiseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67603580DB6C7C7A08CA894 /* AmbientNoiseEngine.swift */; };
 		EC7658622FEE47D78BFEA957 /* DailyStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D409152AD794BA998253C35 /* DailyStats.swift */; };
 /* End PBXBuildFile section */
@@ -75,6 +83,14 @@
 		B6A200092FFD4BD7B90F8AC1 /* OnboardingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingState.swift; sourceTree = "<group>"; };
 		B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		C67603580DB6C7C7A08CA894 /* AmbientNoiseEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientNoiseEngine.swift; sourceTree = "<group>"; };
+		D1A1B0020000000000000001 /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
+		D1A1B0040000000000000001 /* CalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarManager.swift; sourceTree = "<group>"; };
+		D1A1B0060000000000000001 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		D1A1B0080000000000000001 /* TodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoItem.swift; sourceTree = "<group>"; };
+		D1A1B00A0000000000000001 /* TodoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoStore.swift; sourceTree = "<group>"; };
+		D1A1B00C0000000000000001 /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
+		D1A1B00E0000000000000001 /* RemindersSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersSync.swift; sourceTree = "<group>"; };
+		D1A1B0100000000000000001 /* SettingsPermissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPermissionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +154,11 @@
 				7C360D742F191F17007313D3 /* PresetSelection.swift */,
 				7C360D702F191F17007313D3 /* TimerState.swift */,
 				B6A200092FFD4BD7B90F8AC1 /* OnboardingState.swift */,
+				D1A1B0020000000000000001 /* PermissionsManager.swift */,
+				D1A1B0040000000000000001 /* CalendarManager.swift */,
+				D1A1B0080000000000000001 /* TodoItem.swift */,
+				D1A1B00A0000000000000001 /* TodoStore.swift */,
+				D1A1B00E0000000000000001 /* RemindersSync.swift */,
 			);
 			name = State;
 			sourceTree = "<group>";
@@ -161,6 +182,9 @@
 				36B4A1D0B6904D3B9A1E8353 /* VisualEffectBlur.swift */,
 				49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */,
 				B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */,
+				D1A1B0060000000000000001 /* CalendarView.swift */,
+				D1A1B00C0000000000000001 /* TodoListView.swift */,
+				D1A1B0100000000000000001 /* SettingsPermissionsView.swift */,
 			);
 			name = UI;
 			sourceTree = "<group>";
@@ -294,6 +318,14 @@
 				B6A200162FFD4BD7B90F8AC1 /* LocalMusicPlayer.swift in Sources */,
 				B6A200172FFD4BD7B90F8AC1 /* OnboardingState.swift in Sources */,
 				B6A200182FFD4BD7B90F8AC1 /* OnboardingFlowView.swift in Sources */,
+				D1A1B0010000000000000001 /* PermissionsManager.swift in Sources */,
+				D1A1B0030000000000000001 /* CalendarManager.swift in Sources */,
+				D1A1B0050000000000000001 /* CalendarView.swift in Sources */,
+				D1A1B0070000000000000001 /* TodoItem.swift in Sources */,
+				D1A1B0090000000000000001 /* TodoStore.swift in Sources */,
+				D1A1B00B0000000000000001 /* TodoListView.swift in Sources */,
+				D1A1B00D0000000000000001 /* RemindersSync.swift in Sources */,
+				D1A1B00F0000000000000001 /* SettingsPermissionsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -436,10 +468,10 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
 				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
-				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
@@ -489,10 +521,10 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
 				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
-				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;

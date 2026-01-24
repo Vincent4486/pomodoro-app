@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import EventKit
 
 /// CalendarManager handles EventKit Calendar integration for time-based events.

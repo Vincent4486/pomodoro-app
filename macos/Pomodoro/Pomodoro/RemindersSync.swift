@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import EventKit
 
 /// RemindersSync provides optional sync layer between TodoItems and Apple Reminders.
@@ -91,11 +92,7 @@ final class RemindersSync: ObservableObject {
         
         try eventStore.save(reminder, commit: true)
         
-        guard let identifier = reminder.calendarItemIdentifier else {
-            throw SyncError.failedToSync
-        }
-        
-        return identifier
+        return reminder.calendarItemIdentifier
     }
     
     private func updateReminder(_ remindersId: String, with item: TodoItem) async throws {

@@ -1,4 +1,6 @@
 import Foundation
+import AppKit
+import Combine
 import EventKit
 import UserNotifications
 
@@ -77,15 +79,10 @@ final class PermissionsManager: ObservableObject {
             return
         }
         
-        do {
-            let granted = try await eventStore.requestAccess(to: .event)
-            refreshCalendarStatus()
-            
-            if !granted {
-                openSystemSettings()
-            }
-        } catch {
-            print("[PermissionsManager] Calendar request failed: \(error)")
+        let granted = await requestCalendarAccess()
+        refreshCalendarStatus()
+        
+        if !granted {
             openSystemSettings()
         }
     }
@@ -98,15 +95,10 @@ final class PermissionsManager: ObservableObject {
             return
         }
         
-        do {
-            let granted = try await eventStore.requestAccess(to: .reminder)
-            refreshRemindersStatus()
-            
-            if !granted {
-                openSystemSettings()
-            }
-        } catch {
-            print("[PermissionsManager] Reminders request failed: \(error)")
+        let granted = await requestRemindersAccess()
+        refreshRemindersStatus()
+        
+        if !granted {
             openSystemSettings()
         }
     }
@@ -120,6 +112,40 @@ final class PermissionsManager: ObservableObject {
             NSWorkspace.shared.open(url)
         }
     }
+
+    // MARK: - Access Requests (new APIs)
+
+    private func requestCalendarAccess() async -> Bool {
+        if #available(macOS 14.0, *) {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestFullAccessToEvents { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestAccess(to: .event) { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+    }
+
+    private func requestRemindersAccess() async -> Bool {
+        if #available(macOS 14.0, *) {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestFullAccessToReminders { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestAccess(to: .reminder) { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+    }
     
     // MARK: - Status Helpers
     
@@ -128,11 +154,11 @@ final class PermissionsManager: ObservableObject {
     }
     
     var isCalendarAuthorized: Bool {
-        calendarStatus == .authorized || calendarStatus == .fullAccess
+        calendarStatus == .fullAccess || calendarStatus == .writeOnly
     }
     
     var isRemindersAuthorized: Bool {
-        remindersStatus == .authorized || remindersStatus == .fullAccess
+        remindersStatus == .fullAccess || remindersStatus == .writeOnly
     }
     
     var notificationStatusText: String {
@@ -158,8 +184,8 @@ final class PermissionsManager: ObservableObject {
             return "Restricted"
         case .denied:
             return "Denied"
-        case .authorized, .fullAccess:
-            return "Authorized"
+        case .fullAccess:
+            return "Full Access"
         case .writeOnly:
             return "Write Only"
         @unknown default:
@@ -175,8 +201,8 @@ final class PermissionsManager: ObservableObject {
             return "Restricted"
         case .denied:
             return "Denied"
-        case .authorized, .fullAccess:
-            return "Authorized"
+        case .fullAccess:
+            return "Full Access"
         case .writeOnly:
             return "Write Only"
         @unknown default:

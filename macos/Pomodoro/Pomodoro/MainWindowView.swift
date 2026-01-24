@@ -31,8 +31,8 @@ struct MainWindowView: View {
     // New: Calendar, Reminders, and Todo system
     @StateObject private var permissionsManager = PermissionsManager.shared
     @StateObject private var todoStore = TodoStore()
-    @StateObject private var remindersSync = RemindersSync()
-    @StateObject private var calendarManager = CalendarManager()
+    @StateObject private var remindersSync = RemindersSync(permissionsManager: PermissionsManager.shared)
+    @StateObject private var calendarManager = CalendarManager(permissionsManager: PermissionsManager.shared)
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -57,7 +57,7 @@ struct MainWindowView: View {
                 syncDurationTexts()
                 syncLongBreakInterval()
             }
-            .onChange(of: appState.durationConfig) { _ in
+            .onChange(of: appState.durationConfig) { _, _ in
                 syncDurationTexts()
                 syncLongBreakInterval()
             }
@@ -437,9 +437,17 @@ struct MainWindowView: View {
         let status = EKEventStore.authorizationStatus(for: .event)
         calendarStatus = status
         if status == .notDetermined {
-            eventStore.requestAccess(to: .event) { _, _ in
-                DispatchQueue.main.async {
-                    refreshPermissionStatuses()
+            if #available(macOS 14.0, *) {
+                eventStore.requestFullAccessToEvents { _, _ in
+                    DispatchQueue.main.async {
+                        refreshPermissionStatuses()
+                    }
+                }
+            } else {
+                eventStore.requestAccess(to: .event) { _, _ in
+                    DispatchQueue.main.async {
+                        refreshPermissionStatuses()
+                    }
                 }
             }
         }
@@ -450,9 +458,17 @@ struct MainWindowView: View {
         let status = EKEventStore.authorizationStatus(for: .reminder)
         remindersStatus = status
         if status == .notDetermined {
-            eventStore.requestAccess(to: .reminder) { _, _ in
-                DispatchQueue.main.async {
-                    refreshPermissionStatuses()
+            if #available(macOS 14.0, *) {
+                eventStore.requestFullAccessToReminders { _, _ in
+                    DispatchQueue.main.async {
+                        refreshPermissionStatuses()
+                    }
+                }
+            } else {
+                eventStore.requestAccess(to: .reminder) { _, _ in
+                    DispatchQueue.main.async {
+                        refreshPermissionStatuses()
+                    }
                 }
             }
         }

@@ -13,7 +13,7 @@ final class RemindersSync: ObservableObject {
     @Published var isSyncing: Bool = false
     @Published var lastSyncError: String?
     
-    init(permissionsManager: PermissionsManager = .shared) {
+    init(permissionsManager: PermissionsManager) {
         self.permissionsManager = permissionsManager
     }
     

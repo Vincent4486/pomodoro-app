@@ -1,4 +1,6 @@
 import Foundation
+import AppKit
+import Combine
 import EventKit
 import UserNotifications
 
@@ -91,34 +93,33 @@ final class PermissionsManager: ObservableObject {
     func requestCalendarPermission() async {
         // Check current status
         refreshCalendarStatus()
-        
-        switch calendarStatus {
-        case .notDetermined:
-            // Request permission - this will show the system dialog
-            do {
-                let granted = try await eventStore.requestAccess(to: .event)
+
+        if #available(macOS 14.0, *) {
+            switch calendarStatus {
+            case .notDetermined:
+                let granted = await requestCalendarAccess()
                 refreshCalendarStatus()
-                
-                if !granted {
-                    // User denied in the dialog - show alert
-                    showCalendarDeniedAlert = true
-                    print("[PermissionsManager] Calendar permission denied by user")
-                }
-            } catch {
-                print("[PermissionsManager] Calendar request failed: \(error)")
+                if !granted { showCalendarDeniedAlert = true }
+            case .denied, .restricted:
+                showCalendarDeniedAlert = true
+            case .fullAccess, .writeOnly:
+                break
+            default:
+                break
             }
-            
-        case .denied, .restricted:
-            // Already denied or restricted - show alert
-            showCalendarDeniedAlert = true
-            print("[PermissionsManager] Calendar permission already denied or restricted")
-            
-        case .authorized, .fullAccess, .writeOnly:
-            // Already authorized
-            print("[PermissionsManager] Calendar permission already authorized")
-            
-        @unknown default:
-            print("[PermissionsManager] Unknown calendar status")
+        } else {
+            switch calendarStatus {
+            case .notDetermined:
+                let granted = await requestCalendarAccess()
+                refreshCalendarStatus()
+                if !granted { showCalendarDeniedAlert = true }
+            case .denied, .restricted:
+                showCalendarDeniedAlert = true
+            case .authorized:
+                break
+            default:
+                break
+            }
         }
     }
     
@@ -126,34 +127,33 @@ final class PermissionsManager: ObservableObject {
     func requestRemindersPermission() async {
         // Check current status
         refreshRemindersStatus()
-        
-        switch remindersStatus {
-        case .notDetermined:
-            // Request permission - this will show the system dialog
-            do {
-                let granted = try await eventStore.requestAccess(to: .reminder)
+
+        if #available(macOS 14.0, *) {
+            switch remindersStatus {
+            case .notDetermined:
+                let granted = await requestRemindersAccess()
                 refreshRemindersStatus()
-                
-                if !granted {
-                    // User denied in the dialog - show alert
-                    showRemindersDeniedAlert = true
-                    print("[PermissionsManager] Reminders permission denied by user")
-                }
-            } catch {
-                print("[PermissionsManager] Reminders request failed: \(error)")
+                if !granted { showRemindersDeniedAlert = true }
+            case .denied, .restricted:
+                showRemindersDeniedAlert = true
+            case .fullAccess, .writeOnly:
+                break
+            default:
+                break
             }
-            
-        case .denied, .restricted:
-            // Already denied or restricted - show alert
-            showRemindersDeniedAlert = true
-            print("[PermissionsManager] Reminders permission already denied or restricted")
-            
-        case .authorized, .fullAccess, .writeOnly:
-            // Already authorized
-            print("[PermissionsManager] Reminders permission already authorized")
-            
-        @unknown default:
-            print("[PermissionsManager] Unknown reminders status")
+        } else {
+            switch remindersStatus {
+            case .notDetermined:
+                let granted = await requestRemindersAccess()
+                refreshRemindersStatus()
+                if !granted { showRemindersDeniedAlert = true }
+            case .denied, .restricted:
+                showRemindersDeniedAlert = true
+            case .authorized:
+                break
+            default:
+                break
+            }
         }
     }
     
@@ -189,6 +189,40 @@ final class PermissionsManager: ObservableObject {
             NSWorkspace.shared.open(url)
         }
     }
+
+    // MARK: - Private helpers
+
+    private func requestCalendarAccess() async -> Bool {
+        if #available(macOS 14.0, *) {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestFullAccessToEvents { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestAccess(to: .event) { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+    }
+
+    private func requestRemindersAccess() async -> Bool {
+        if #available(macOS 14.0, *) {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestFullAccessToReminders { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        } else {
+            return await withCheckedContinuation { continuation in
+                eventStore.requestAccess(to: .reminder) { granted, _ in
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
+    }
     
     // MARK: - Status Helpers
     
@@ -197,11 +231,19 @@ final class PermissionsManager: ObservableObject {
     }
     
     var isCalendarAuthorized: Bool {
-        calendarStatus == .authorized || calendarStatus == .fullAccess
+        if #available(macOS 14.0, *) {
+            return calendarStatus == .fullAccess || calendarStatus == .writeOnly
+        } else {
+            return calendarStatus == .authorized
+        }
     }
     
     var isRemindersAuthorized: Bool {
-        remindersStatus == .authorized || remindersStatus == .fullAccess
+        if #available(macOS 14.0, *) {
+            return remindersStatus == .fullAccess || remindersStatus == .writeOnly
+        } else {
+            return remindersStatus == .authorized
+        }
     }
     
     var notificationStatusText: String {
@@ -220,36 +262,44 @@ final class PermissionsManager: ObservableObject {
     }
     
     var calendarStatusText: String {
-        switch calendarStatus {
-        case .notDetermined:
-            return "Not Requested"
-        case .restricted:
-            return "Restricted"
-        case .denied:
-            return "Denied"
-        case .authorized, .fullAccess:
-            return "Authorized"
-        case .writeOnly:
-            return "Write Only"
-        @unknown default:
-            return "Unknown"
+        if #available(macOS 14.0, *) {
+            switch calendarStatus {
+            case .notDetermined: return "Not Requested"
+            case .restricted: return "Restricted"
+            case .denied: return "Denied"
+            case .fullAccess: return "Full Access"
+            case .writeOnly: return "Write Only"
+            default: return "Unknown"
+            }
+        } else {
+            switch calendarStatus {
+            case .notDetermined: return "Not Requested"
+            case .restricted: return "Restricted"
+            case .denied: return "Denied"
+            case .authorized: return "Authorized"
+            default: return "Unknown"
+            }
         }
     }
     
     var remindersStatusText: String {
-        switch remindersStatus {
-        case .notDetermined:
-            return "Not Requested"
-        case .restricted:
-            return "Restricted"
-        case .denied:
-            return "Denied"
-        case .authorized, .fullAccess:
-            return "Authorized"
-        case .writeOnly:
-            return "Write Only"
-        @unknown default:
-            return "Unknown"
+        if #available(macOS 14.0, *) {
+            switch remindersStatus {
+            case .notDetermined: return "Not Requested"
+            case .restricted: return "Restricted"
+            case .denied: return "Denied"
+            case .fullAccess: return "Full Access"
+            case .writeOnly: return "Write Only"
+            default: return "Unknown"
+            }
+        } else {
+            switch remindersStatus {
+            case .notDetermined: return "Not Requested"
+            case .restricted: return "Restricted"
+            case .denied: return "Denied"
+            case .authorized: return "Authorized"
+            default: return "Unknown"
+            }
         }
     }
 }

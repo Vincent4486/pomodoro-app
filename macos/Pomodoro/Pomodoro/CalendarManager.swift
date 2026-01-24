@@ -13,7 +13,7 @@ final class CalendarManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var error: String?
     
-    init(permissionsManager: PermissionsManager = .shared) {
+    init(permissionsManager: PermissionsManager) {
         self.permissionsManager = permissionsManager
     }
     

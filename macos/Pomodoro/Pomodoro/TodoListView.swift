@@ -311,7 +311,7 @@ struct TodoListView: View {
 
 #Preview {
     let store = TodoStore()
-    let sync = RemindersSync()
+    let sync = RemindersSync(permissionsManager: .shared)
     sync.setTodoStore(store)
     
     return TodoListView(

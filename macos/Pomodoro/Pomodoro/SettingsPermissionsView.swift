@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 
 /// Settings view with centralized permission overview.
 /// Shows status and enable buttons for Notifications, Calendar, and Reminders.

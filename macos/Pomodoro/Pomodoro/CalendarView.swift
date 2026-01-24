@@ -29,7 +29,7 @@ struct CalendarView: View {
                 unauthorizedContent
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 520, idealWidth: 680, maxWidth: 900, minHeight: 520, alignment: .top)
         .onAppear {
             permissionsManager.refreshCalendarStatus()
             if permissionsManager.isCalendarAuthorized {
@@ -41,7 +41,7 @@ struct CalendarView: View {
     }
     
     private var authorizedContent: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             // Header
             VStack(spacing: 8) {
                 Text("Calendar")
@@ -67,41 +67,19 @@ struct CalendarView: View {
                 }
             }
             
-            // Events list
-            ScrollView {
-                if calendarManager.isLoading {
-                    ProgressView("Loading events...")
-                        .padding(32)
-                } else if calendarManager.events.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
-                        
-                        Text("No events")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        
-                        Text("You have no events in this time period")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(48)
-                } else {
-                    LazyVStack(spacing: 12) {
-                        ForEach(calendarManager.events, id: \.eventIdentifier) { event in
-                            eventRow(event)
-                        }
-                    }
-                    .padding(16)
+            // Events list constrained to the available detail height
+            GeometryReader { proxy in
+                ScrollView {
+                    eventsContent(maxWidth: proxy.size.width)
                 }
+                .frame(height: max(proxy.size.height, 280))
             }
             
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 32)
-        .padding(.bottom, 28)
+        .padding(.vertical, 24)
+        .frame(maxWidth: 860, alignment: .leading)
     }
     
     private var unauthorizedContent: some View {
@@ -140,8 +118,8 @@ struct CalendarView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(48)
+        .frame(maxWidth: 520, minHeight: 420, alignment: .center)
         .alert("Calendar Access Denied", isPresented: $permissionsManager.showCalendarDeniedAlert) {
             Button("Open Settings") {
                 permissionsManager.openSystemSettings()
@@ -149,6 +127,39 @@ struct CalendarView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Calendar access is required to view your events. You can enable it in System Settings → Privacy & Security → Calendar.")
+        }
+    }
+    
+    @ViewBuilder
+    private func eventsContent(maxWidth: CGFloat) -> some View {
+        if calendarManager.isLoading {
+            ProgressView("Loading events...")
+                .padding(32)
+                .frame(maxWidth: maxWidth, alignment: .leading)
+        } else if calendarManager.events.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                
+                Text("No events")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                
+                Text("You have no events in this time period")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: maxWidth, alignment: .center)
+            .padding(48)
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(calendarManager.events, id: \.eventIdentifier) { event in
+                    eventRow(event)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: maxWidth, alignment: .leading)
         }
     }
     
@@ -208,7 +219,7 @@ struct CalendarView: View {
 
 #Preview {
     CalendarView(
-        calendarManager: CalendarManager(),
+        calendarManager: CalendarManager(permissionsManager: .shared),
         permissionsManager: .shared
     )
     .frame(width: 700, height: 600)

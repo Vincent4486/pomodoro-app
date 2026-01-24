@@ -8,9 +8,6 @@ struct CalendarView: View {
     @ObservedObject var permissionsManager: PermissionsManager
     
     @State private var selectedView: ViewType = .today
-
-    private let minSize = CGSize(width: 720, height: 520)
-    private let idealSize = CGSize(width: 840, height: 620)
     
     private static let eventTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -32,16 +29,7 @@ struct CalendarView: View {
                 unauthorizedContent
             }
         }
-        // Bound the view so it does not expand the window when switching tabs.
-        .frame(
-            minWidth: minSize.width,
-            idealWidth: idealSize.width,
-            maxWidth: 900,
-            minHeight: minSize.height,
-            idealHeight: idealSize.height,
-            maxHeight: 760,
-            alignment: .top
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             permissionsManager.refreshCalendarStatus()
             if permissionsManager.isCalendarAuthorized {
@@ -109,11 +97,11 @@ struct CalendarView: View {
                     .padding(16)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: 360, alignment: .top)
+            
+            Spacer()
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 28)
-        .frame(maxWidth: .infinity, alignment: .top)
     }
     
     private var unauthorizedContent: some View {
@@ -133,7 +121,7 @@ struct CalendarView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 
-                Text("Enable Calendar access in System Settings to use this feature.")
+                Text("Click the button below to request access.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -143,17 +131,25 @@ struct CalendarView: View {
             
             Button(action: {
                 Task {
-                    await permissionsManager.registerCalendarIntent()
+                    await permissionsManager.requestCalendarPermission()
                 }
             }) {
-                Label("Enable Calendar Access", systemImage: "calendar")
+                Label("Request Calendar Access", systemImage: "calendar")
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
-        .frame(maxWidth: 520)
-        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(48)
+        .alert("Calendar Access Denied", isPresented: $permissionsManager.showCalendarDeniedAlert) {
+            Button("Open Settings") {
+                permissionsManager.openSystemSettings()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Calendar access is required to view your events. You can enable it in System Settings → Privacy & Security → Calendar.")
+        }
     }
     
     @ViewBuilder

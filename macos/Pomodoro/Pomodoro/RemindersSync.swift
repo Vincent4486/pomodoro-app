@@ -88,7 +88,7 @@ final class RemindersSync: ObservableObject {
     // MARK: - Private Helpers
     
     private func syncSingleItem(_ item: TodoItem) async throws {
-        guard let dueDate = item.dueDate else { return }
+        guard item.dueDate != nil else { return }
         
         if let duration = item.durationMinutes, duration > 0 {
             // Calendar event path

@@ -246,11 +246,12 @@ struct CalendarView: View {
     private func weekContent(maxWidth: CGFloat) -> some View {
         let days = daysInWeek(from: anchorDate)
         
-        WeekTimelineView(
+        WeekCalendarView(
             days: days,
-            events: eventsGroupedByDay(for: days)
+            events: calendarManager.events,
+            tasks: todoStore.items
         )
-        .frame(maxWidth: maxWidth, alignment: .leading)
+        .frame(maxWidth: maxWidth, alignment: Alignment.leading)
         .padding(.horizontal, 8)
     }
     
@@ -290,6 +291,28 @@ struct CalendarView: View {
         for event in calendarManager.events {
             if let match = days.first(where: { calendar.isDate(event.startDate, inSameDayAs: $0) }) {
                 dict[match, default: []].append(event)
+            }
+        }
+        return dict
+    }
+    
+    private func tasks(for day: Date) -> [TodoItem] {
+        let calendar = Calendar.current
+        return todoStore.items.filter { item in
+            if let due = item.dueDate {
+                return calendar.isDate(due, inSameDayAs: day)
+            }
+            return false
+        }
+    }
+    
+    private func tasksGroupedByDay(for days: [Date]) -> [Date: [TodoItem]] {
+        var dict: [Date: [TodoItem]] = [:]
+        let calendar = Calendar.current
+        for item in todoStore.items {
+            guard let due = item.dueDate else { continue }
+            if let match = days.first(where: { calendar.isDate(due, inSameDayAs: $0) }) {
+                dict[match, default: []].append(item)
             }
         }
         return dict
@@ -505,40 +528,65 @@ struct CalendarView: View {
     }
 }
 
-/// Single-day vertical timeline with hour rows.
+/// Single-day vertical timeline with compact, balanced layout.
 private struct DayTimelineView: View {
     let date: Date
     let events: [EKEvent]
     
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
+        GeometryReader { proxy in
+            let availableHeight = proxy.size.height
+            let preferredRowHeight: CGFloat = 44
+            let contentHeight = preferredRowHeight * 24
+            let needsScroll = contentHeight > availableHeight
+            let rowHeight = needsScroll ? preferredRowHeight : max(availableHeight / 24, 32)
+            
+            let timeline = VStack(spacing: 0) {
                 ForEach(0..<24, id: \.self) { hour in
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
                         Text(hourLabel(hour))
                             .font(.caption)
-                            .frame(width: 44, alignment: .trailing)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 46, alignment: .trailing)
                         
-                        VStack(alignment: .leading, spacing: 4) {
-                            let hourEvents = eventsForHour(hour)
+                        ZStack(alignment: .topLeading) {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(0.03))
+                                .frame(height: rowHeight - 8)
                             
-                            if hourEvents.isEmpty {
-                                Text(" ")
-                                    .font(.caption2)
-                            } else {
-                                ForEach(hourEvents, id: \.eventIdentifier) { event in
-                                    eventChip(event)
+                            VStack(alignment: .leading, spacing: 4) {
+                                let hourEvents = eventsForHour(hour)
+                                if hourEvents.isEmpty {
+                                    Text(" ")
+                                        .font(.caption2)
+                                } else {
+                                    ForEach(hourEvents, id: \.eventIdentifier) { event in
+                                        eventChip(event)
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
                         }
-                        Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical, 6)
+                    .frame(height: rowHeight, alignment: .top)
                     
-                    Divider()
+                    if hour < 23 {
+                        Divider()
+                            .opacity(0.25)
+                    }
                 }
             }
             .padding(.vertical, 8)
+            .padding(.trailing, 4)
+            
+            if needsScroll {
+                ScrollView { timeline }
+            } else {
+                timeline
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
         }
     }
     
@@ -560,10 +608,11 @@ private struct DayTimelineView: View {
     private func eventChip(_ event: EKEvent) -> some View {
         Text(event.title ?? "Untitled")
             .font(.caption2)
-            .padding(6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.08))
-            .cornerRadius(6)
+            .background(Color.primary.opacity(0.1))
+            .cornerRadius(8)
     }
 }
 
@@ -571,6 +620,7 @@ private struct DayTimelineView: View {
 private struct WeekTimelineView: View {
     let days: [Date]
     let events: [Date: [EKEvent]]
+    let tasks: [Date: [TodoItem]]
     
     // Height estimates based on actual UI components:
     // - Row: 6pt top padding + ~20pt content (caption2 font) + 6pt bottom padding = 32pt
@@ -684,6 +734,15 @@ private struct WeekTimelineView: View {
         }
     }
     
+    private func tasksForHour(day: Date, hour: Int) -> [TodoItem] {
+        let calendar = Calendar.current
+        let dayTasks = tasks[day] ?? []
+        return dayTasks.filter {
+            guard let due = $0.dueDate else { return false }
+            return calendar.component(.hour, from: due) == hour
+        }
+    }
+    
     private func hourLabel(_ hour: Int) -> String {
         let date = Calendar.current.date(from: DateComponents(hour: hour)) ?? Date()
         let formatter = DateFormatter()
@@ -710,6 +769,17 @@ private struct WeekTimelineView: View {
             .padding(6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.primary.opacity(0.08))
+            .cornerRadius(6)
+    }
+    
+    @ViewBuilder
+    private func taskChip(_ task: TodoItem) -> some View {
+        Text(task.title)
+            .font(.caption2)
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.blue.opacity(0.12))
+            .foregroundStyle(.blue)
             .cornerRadius(6)
     }
 }

@@ -45,6 +45,7 @@
 		D1A1B00B0000000000000001 /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B00C0000000000000001 /* TodoListView.swift */; };
 		D1A1B00D0000000000000001 /* RemindersSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B00E0000000000000001 /* RemindersSync.swift */; };
 		D1A1B00F0000000000000001 /* SettingsPermissionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0100000000000000001 /* SettingsPermissionsView.swift */; };
+		D1A1B0120000000000000002 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B0110000000000000002 /* WeekCalendarView.swift */; };
 		E7FB0168DAB22D17FF66223F /* AmbientNoiseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67603580DB6C7C7A08CA894 /* AmbientNoiseEngine.swift */; };
 		EC7658622FEE47D78BFEA957 /* DailyStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D409152AD794BA998253C35 /* DailyStats.swift */; };
 /* End PBXBuildFile section */
@@ -78,6 +79,7 @@
 		B6A200042FFD4BD7B90F8AC1 /* AppleMusicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicProvider.swift; sourceTree = "<group>"; };
 		B6A200052FFD4BD7B90F8AC1 /* SpotifyProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyProvider.swift; sourceTree = "<group>"; };
 		B6A200062FFD4BD7B90F8AC1 /* QQMusicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QQMusicProvider.swift; sourceTree = "<group>"; };
+		D1A1B0110000000000000002 /* WeekCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarView.swift; sourceTree = "<group>"; };
 		B6A200072FFD4BD7B90F8AC1 /* AppleScriptRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleScriptRunner.swift; sourceTree = "<group>"; };
 		B6A200082FFD4BD7B90F8AC1 /* LocalMusicPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMusicPlayer.swift; sourceTree = "<group>"; };
 		B6A200092FFD4BD7B90F8AC1 /* OnboardingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingState.swift; sourceTree = "<group>"; };
@@ -183,6 +185,7 @@
 				49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */,
 				B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */,
 				D1A1B0060000000000000001 /* CalendarView.swift */,
+				D1A1B0110000000000000002 /* WeekCalendarView.swift */,
 				D1A1B00C0000000000000001 /* TodoListView.swift */,
 				D1A1B0100000000000000001 /* SettingsPermissionsView.swift */,
 			);
@@ -321,6 +324,7 @@
 				D1A1B0010000000000000001 /* PermissionsManager.swift in Sources */,
 				D1A1B0030000000000000001 /* CalendarManager.swift in Sources */,
 				D1A1B0050000000000000001 /* CalendarView.swift in Sources */,
+				D1A1B0120000000000000002 /* WeekCalendarView.swift in Sources */,
 				D1A1B0070000000000000001 /* TodoItem.swift in Sources */,
 				D1A1B0090000000000000001 /* TodoStore.swift in Sources */,
 				D1A1B00B0000000000000001 /* TodoListView.swift in Sources */,

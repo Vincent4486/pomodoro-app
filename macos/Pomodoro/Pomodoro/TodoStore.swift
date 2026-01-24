@@ -8,6 +8,8 @@ final class TodoStore: ObservableObject {
     @Published var items: [TodoItem] = []
     
     private let storageKey = "com.pomodoro.todoItems"
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
     
     init() {
         loadItems()
@@ -63,14 +65,14 @@ final class TodoStore: ObservableObject {
     // MARK: - Persistence
     
     private func saveItems() {
-        if let encoded = try? JSONEncoder().encode(items) {
+        if let encoded = try? encoder.encode(items) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
         }
     }
     
     private func loadItems() {
         if let data = UserDefaults.standard.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([TodoItem].self, from: data) {
+           let decoded = try? decoder.decode([TodoItem].self, from: data) {
             items = decoded
         }
     }

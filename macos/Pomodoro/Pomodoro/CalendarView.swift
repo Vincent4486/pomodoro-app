@@ -9,6 +9,12 @@ struct CalendarView: View {
     
     @State private var selectedView: ViewType = .today
     
+    private static let eventTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }()
+    
     enum ViewType {
         case today
         case week
@@ -172,14 +178,11 @@ struct CalendarView: View {
     }
     
     private func formatEventTime(_ event: EKEvent) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        
         if event.isAllDay {
             return "All day"
         } else {
-            let start = formatter.string(from: event.startDate)
-            let end = formatter.string(from: event.endDate)
+            let start = Self.eventTimeFormatter.string(from: event.startDate)
+            let end = Self.eventTimeFormatter.string(from: event.endDate)
             return "\(start) - \(end)"
         }
     }

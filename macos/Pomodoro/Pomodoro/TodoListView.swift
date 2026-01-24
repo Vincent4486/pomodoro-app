@@ -11,6 +11,13 @@ struct TodoListView: View {
     @State private var newItemTitle = ""
     @State private var showCompleted = true
     
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter
+    }()
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -249,10 +256,7 @@ struct TodoListView: View {
     }
     
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
+        Self.dateFormatter.string(from: date)
     }
     
     private var filteredItems: [TodoItem] {

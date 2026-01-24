@@ -8,6 +8,9 @@ import UserNotifications
 final class PermissionsManager: ObservableObject {
     static let shared = PermissionsManager()
     
+    // System Settings URL
+    private static let systemSettingsURL = "x-apple.systempreferences:com.apple.preference.security?Privacy"
+    
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
     @Published var calendarStatus: EKAuthorizationStatus = .notDetermined
     @Published var remindersStatus: EKAuthorizationStatus = .notDetermined
@@ -113,7 +116,7 @@ final class PermissionsManager: ObservableObject {
     /// Opens macOS System Settings app
     /// This is the primary UX for permission management
     func openSystemSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
+        if let url = URL(string: Self.systemSettingsURL) {
             NSWorkspace.shared.open(url)
         }
     }

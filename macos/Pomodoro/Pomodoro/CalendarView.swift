@@ -12,6 +12,7 @@ struct CalendarView: View {
     private static let eventTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
+        formatter.locale = .autoupdatingCurrent
         return formatter
     }()
     

@@ -15,6 +15,7 @@ struct TodoListView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .none
+        formatter.locale = .autoupdatingCurrent
         return formatter
     }()
     

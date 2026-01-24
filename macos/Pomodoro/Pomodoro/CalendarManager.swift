@@ -52,7 +52,15 @@ final class CalendarManager: ObservableObject {
         await fetchEvents(from: startOfDay, to: endOfDay)
     }
     
-    /// Fetch events for current week
+    /// Fetch events for a specific day (alias for fetchTodayEvents when using arbitrary date)
+    func fetchDayEvents(for date: Date) async {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? date
+        await fetchEvents(from: startOfDay, to: endOfDay)
+    }
+    
+    /// Fetch events for current week (starting at user's locale week start)
     func fetchWeekEvents() async {
         let calendar = Calendar.current
         let today = Date()
@@ -63,6 +71,26 @@ final class CalendarManager: ObservableObject {
         }
         
         await fetchEvents(from: startOfWeek, to: endOfWeek)
+    }
+    
+    /// Fetch events for the week containing the given date
+    func fetchWeekEvents(containing date: Date) async {
+        let calendar = Calendar.current
+        guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)),
+              let endOfWeek = calendar.date(byAdding: .day, value: 7, to: startOfWeek) else {
+            return
+        }
+        await fetchEvents(from: startOfWeek, to: endOfWeek)
+    }
+    
+    /// Fetch events for the month containing the given date
+    func fetchMonthEvents(containing date: Date) async {
+        let calendar = Calendar.current
+        guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)),
+              let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth) else {
+            return
+        }
+        await fetchEvents(from: startOfMonth, to: endOfMonth)
     }
     
     // MARK: - Event Creation

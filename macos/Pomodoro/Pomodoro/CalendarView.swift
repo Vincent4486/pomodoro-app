@@ -1,13 +1,23 @@
 import SwiftUI
 import EventKit
 
-/// Calendar view showing time-based events.
+/// Calendar view showing time-based events and allowing event creation.
 /// Blocked when unauthorized with explanation and enable button.
 struct CalendarView: View {
     @ObservedObject var calendarManager: CalendarManager
     @ObservedObject var permissionsManager: PermissionsManager
+    @ObservedObject var todoStore: TodoStore
     
-    @State private var selectedView: ViewType = .today
+    @State private var selectedView: ViewType = .day
+    @State private var anchorDate: Date = Date()
+    
+    // New event sheet state
+    @State private var showingAddEvent = false
+    @State private var newEventTitle: String = ""
+    @State private var newEventStart: Date = Date()
+    @State private var newEventDurationMinutes: Int = 60
+    @State private var newEventNotes: String = ""
+    @State private var addEventError: String?
     
     private static let eventTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -16,9 +26,31 @@ struct CalendarView: View {
         return formatter
     }()
     
+    private static let dayHeaderFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .none
+        return formatter
+    }()
+    
+    private static let shortDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, MMM d"
+        return formatter
+    }()
+    
     enum ViewType {
-        case today
+        case day
         case week
+        case month
+        
+        var title: String {
+            switch self {
+            case .day: return "Day"
+            case .week: return "Week"
+            case .month: return "Month"
+            }
+        }
     }
     
     var body: some View {
@@ -38,6 +70,22 @@ struct CalendarView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingAddEvent) {
+            AddEventSheet(
+                title: $newEventTitle,
+                startDate: $newEventStart,
+                durationMinutes: $newEventDurationMinutes,
+                notes: $newEventNotes,
+                errorMessage: addEventError,
+                onCancel: {
+                    showingAddEvent = false
+                    addEventError = nil
+                },
+                onSave: {
+                    Task { await saveEvent() }
+                }
+            )
+        }
     }
     
     private var authorizedContent: some View {
@@ -54,17 +102,46 @@ struct CalendarView: View {
             }
             .padding(.top, 32)
             
-            // View selector
-            Picker("View", selection: $selectedView) {
-                Text("Today").tag(ViewType.today)
-                Text("Week").tag(ViewType.week)
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 300)
-            .onChange(of: selectedView) { _ in
-                Task {
-                    await loadEvents()
+            // View selector + date anchor + add button
+            HStack(spacing: 12) {
+                Picker("View", selection: $selectedView) {
+                    Text("Day").tag(ViewType.day)
+                    Text("Week").tag(ViewType.week)
+                    Text("Month").tag(ViewType.month)
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 260)
+                .onChange(of: selectedView) { _, _ in
+                    Task { await loadEvents() }
+                }
+                
+                DatePicker(
+                    "",
+                    selection: $anchorDate,
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .datePickerStyle(.field)
+                .onChange(of: anchorDate) { _, _ in
+                    Task { await loadEvents() }
+                }
+                
+                Spacer()
+                
+                Button {
+                    prepareNewEventDefaults()
+                    showingAddEvent = true
+                } label: {
+                    Label("Add Event", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                
+                Button {
+                    Task { await loadEvents() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
             }
             
             // Events list constrained to the available detail height
@@ -136,31 +213,187 @@ struct CalendarView: View {
             ProgressView("Loading events...")
                 .padding(32)
                 .frame(maxWidth: maxWidth, alignment: .leading)
-        } else if calendarManager.events.isEmpty {
-            VStack(spacing: 12) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
-                
-                Text("No events")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                
-                Text("You have no events in this time period")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        } else {
+            switch selectedView {
+            case .day:
+                dayContent(maxWidth: maxWidth)
+            case .week:
+                weekContent(maxWidth: maxWidth)
+            case .month:
+                monthContent(maxWidth: maxWidth)
             }
-            .frame(maxWidth: maxWidth, alignment: .center)
-            .padding(48)
+        }
+    }
+    
+    @ViewBuilder
+    private func dayContent(maxWidth: CGFloat) -> some View {
+        let dayEvents = events(for: anchorDate)
+        let dayTasks = tasks(for: anchorDate)
+        
+        if dayEvents.isEmpty && dayTasks.isEmpty {
+            emptyState(message: "No events or tasks on this day", maxWidth: maxWidth)
         } else {
             LazyVStack(spacing: 12) {
-                ForEach(calendarManager.events, id: \.eventIdentifier) { event in
+                if !dayEvents.isEmpty {
+                    Text("Calendar Events")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                ForEach(dayEvents, id: \.eventIdentifier) { event in
                     eventRow(event)
+                }
+                
+                if !dayTasks.isEmpty {
+                    Text("Tasks")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                ForEach(dayTasks, id: \.id) { task in
+                    taskRow(task)
                 }
             }
             .padding(16)
             .frame(maxWidth: maxWidth, alignment: .leading)
         }
+    }
+    
+    @ViewBuilder
+    private func weekContent(maxWidth: CGFloat) -> some View {
+        let days = daysInWeek(from: anchorDate)
+        
+        LazyVStack(alignment: .leading, spacing: 12) {
+            ForEach(days, id: \.self) { day in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(Self.shortDayFormatter.string(from: day))
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    
+                    let dayEvents = events(for: day)
+                    let dayTasks = tasks(for: day)
+                    if dayEvents.isEmpty && dayTasks.isEmpty {
+                        Text("No events")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(dayEvents, id: \.eventIdentifier) { event in
+                                eventRow(event)
+                            }
+                            ForEach(dayTasks, id: \.id) { task in
+                                taskRow(task)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: maxWidth, alignment: .leading)
+    }
+    
+    @ViewBuilder
+    private func monthContent(maxWidth: CGFloat) -> some View {
+        let days = daysInMonth(from: anchorDate)
+        
+        if days.isEmpty {
+            emptyState(message: "No events this month", maxWidth: maxWidth)
+        } else {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ForEach(days, id: \.self) { day in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(Self.dayHeaderFormatter.string(from: day))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        
+                        let dayEvents = events(for: day)
+                        let dayTasks = tasks(for: day)
+                        if dayEvents.isEmpty && dayTasks.isEmpty {
+                            Text("No events")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(dayEvents, id: \.eventIdentifier) { event in
+                                    eventRow(event)
+                                }
+                                ForEach(dayTasks, id: \.id) { task in
+                                    taskRow(task)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: maxWidth, alignment: .leading)
+        }
+    }
+    
+    private func events(for day: Date) -> [EKEvent] {
+        let calendar = Calendar.current
+        return calendarManager.events.filter { event in
+            calendar.isDate(event.startDate, inSameDayAs: day)
+        }
+    }
+    
+    private func tasks(for day: Date) -> [TodoItem] {
+        let calendar = Calendar.current
+        return todoStore.items.filter { item in
+            if let due = item.dueDate {
+                return calendar.isDate(due, inSameDayAs: day)
+            }
+            return false
+        }
+    }
+    
+    private func daysInWeek(from date: Date) -> [Date] {
+        var days: [Date] = []
+        let calendar = Calendar.current
+        guard let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)) else {
+            return days
+        }
+        for offset in 0..<7 {
+            if let day = calendar.date(byAdding: .day, value: offset, to: startOfWeek) {
+                days.append(day)
+            }
+        }
+        return days
+    }
+    
+    private func daysInMonth(from date: Date) -> [Date] {
+        var days: [Date] = []
+        let calendar = Calendar.current
+        guard let range = calendar.range(of: .day, in: .month, for: date),
+              let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) else {
+            return days
+        }
+        for day in range {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: startOfMonth) {
+                days.append(date)
+            }
+        }
+        return days
+    }
+    
+    @ViewBuilder
+    private func emptyState(message: String, maxWidth: CGFloat) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "calendar")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            
+            Text("No events")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: maxWidth, alignment: .center)
+        .padding(48)
     }
     
     @ViewBuilder
@@ -197,6 +430,48 @@ struct CalendarView: View {
         .cornerRadius(8)
     }
     
+    @ViewBuilder
+    private func taskRow(_ task: TodoItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Task", systemImage: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                Spacer()
+                if let due = task.dueDate {
+                    Text(Self.eventTimeFormatter.string(from: due))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(task.title)
+                .font(.headline)
+            if let notes = task.notes, !notes.isEmpty {
+                Text(notes)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            if !task.tags.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(task.tags, id: \.self) { tag in
+                        Text(tag)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.12))
+                            .foregroundStyle(.blue)
+                            .cornerRadius(4)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.blue.opacity(0.08))
+        .cornerRadius(8)
+    }
+    
     private func formatEventTime(_ event: EKEvent) -> String {
         if event.isAllDay {
             return "All day"
@@ -209,18 +484,114 @@ struct CalendarView: View {
     
     private func loadEvents() async {
         switch selectedView {
-        case .today:
-            await calendarManager.fetchTodayEvents()
+        case .day:
+            await calendarManager.fetchDayEvents(for: anchorDate)
         case .week:
-            await calendarManager.fetchWeekEvents()
+            await calendarManager.fetchWeekEvents(containing: anchorDate)
+        case .month:
+            await calendarManager.fetchMonthEvents(containing: anchorDate)
         }
+    }
+    
+    private func prepareNewEventDefaults() {
+        newEventTitle = ""
+        newEventNotes = ""
+        newEventDurationMinutes = 60
+        
+        // Align start time to the selected date, keeping the current hour.
+        let calendar = Calendar.current
+        let now = Date()
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        let roundedMinute = minute >= 30 ? 30 : 0
+        newEventStart = calendar.date(
+            bySettingHour: hour,
+            minute: roundedMinute,
+            second: 0,
+            of: anchorDate
+        ) ?? anchorDate
+    }
+    
+    private func saveEvent() async {
+        let endDate = newEventStart.addingTimeInterval(Double(newEventDurationMinutes * 60))
+        do {
+            try await calendarManager.createEvent(
+                title: newEventTitle.isEmpty ? "New Event" : newEventTitle,
+                startDate: newEventStart,
+                endDate: endDate,
+                notes: newEventNotes.isEmpty ? nil : newEventNotes
+            )
+            addEventError = nil
+            showingAddEvent = false
+            await loadEvents()
+        } catch {
+            addEventError = error.localizedDescription
+        }
+    }
+}
+
+private struct AddEventSheet: View {
+    @Binding var title: String
+    @Binding var startDate: Date
+    @Binding var durationMinutes: Int
+    @Binding var notes: String
+    
+    let errorMessage: String?
+    let onCancel: () -> Void
+    let onSave: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Add Event")
+                .font(.title3)
+                .fontWeight(.semibold)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Title", text: $title)
+                    .textFieldStyle(.roundedBorder)
+                
+                DatePicker("Start", selection: $startDate)
+                
+                HStack {
+                    Text("Duration")
+                    Spacer()
+                    Stepper("\(durationMinutes) min", value: $durationMinutes, in: 15...480, step: 15)
+                }
+                
+                TextField("Notes (optional)", text: $notes, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.bordered)
+                
+                Spacer()
+                
+                Button("Save") {
+                    onSave()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(title.isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
     }
 }
 
 #Preview {
     CalendarView(
         calendarManager: CalendarManager(permissionsManager: .shared),
-        permissionsManager: .shared
+        permissionsManager: .shared,
+        todoStore: TodoStore()
     )
     .frame(width: 700, height: 600)
 }

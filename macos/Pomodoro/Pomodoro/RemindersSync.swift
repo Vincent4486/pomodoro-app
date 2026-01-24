@@ -76,7 +76,7 @@ final class RemindersSync: ObservableObject {
     private func createReminder(from item: TodoItem) async throws -> String {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.title = item.title
-        reminder.notes = item.notes
+        reminder.notes = combinedNotes(from: item)
         reminder.isCompleted = item.isCompleted
         
         if let dueDate = item.dueDate {
@@ -101,7 +101,7 @@ final class RemindersSync: ObservableObject {
         }
         
         reminder.title = item.title
-        reminder.notes = item.notes
+        reminder.notes = combinedNotes(from: item)
         reminder.isCompleted = item.isCompleted
         
         if let dueDate = item.dueDate {
@@ -127,6 +127,17 @@ final class RemindersSync: ObservableObject {
         case .high:
             return 1
         }
+    }
+    
+    private func combinedNotes(from item: TodoItem) -> String? {
+        var parts: [String] = []
+        if let notes = item.notes, !notes.isEmpty {
+            parts.append(notes)
+        }
+        if !item.tags.isEmpty {
+            parts.append("Tags: \(item.tags.joined(separator: ", "))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
     
     // MARK: - Error Types

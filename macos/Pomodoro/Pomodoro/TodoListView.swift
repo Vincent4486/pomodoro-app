@@ -7,8 +7,13 @@ struct TodoListView: View {
     @ObservedObject var remindersSync: RemindersSync
     @ObservedObject var permissionsManager: PermissionsManager
     
-    @State private var showingAddSheet = false
-    @State private var newItemTitle = ""
+    @State private var showingEditor = false
+    @State private var editingItem: TodoItem?
+    @State private var titleField = ""
+    @State private var notesField = ""
+    @State private var tagsField = ""
+    @State private var dueDateEnabled = false
+    @State private var dueDateField = Date()
     @State private var showCompleted = true
     
     private static let dateFormatter: DateFormatter = {
@@ -41,7 +46,7 @@ struct TodoListView: View {
             
             // Toolbar
             HStack {
-                Button(action: { showingAddSheet = true }) {
+                Button(action: { openEditorForNew() }) {
                     Label("Add Task", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
@@ -77,8 +82,8 @@ struct TodoListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 32)
         .padding(.bottom, 28)
-        .sheet(isPresented: $showingAddSheet) {
-            addTaskSheet
+        .sheet(isPresented: $showingEditor) {
+            taskEditorSheet
         }
         .onAppear {
             permissionsManager.refreshRemindersStatus()
@@ -176,6 +181,20 @@ struct TodoListView: View {
                         .lineLimit(1)
                 }
                 
+                if !item.tags.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(item.tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.12))
+                                .foregroundStyle(.blue)
+                                .cornerRadius(4)
+                        }
+                    }
+                }
+                
                 HStack(spacing: 8) {
                     if item.priority != .none {
                         priorityBadge(item.priority)
@@ -216,6 +235,12 @@ struct TodoListView: View {
                     }
                     
                     Divider()
+                }
+                
+                Button {
+                    openEditorForEdit(item)
+                } label: {
+                    Label("Edit", systemImage: "pencil")
                 }
                 
                 Button(role: .destructive, action: {
@@ -276,36 +301,132 @@ struct TodoListView: View {
         }
     }
     
-    private var addTaskSheet: some View {
-        VStack(spacing: 20) {
-            Text("Add Task")
+    private var taskEditorSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(editingItem == nil ? "Add Task" : "Edit Task")
                 .font(.title2)
                 .fontWeight(.semibold)
             
-            TextField("Task title", text: $newItemTitle)
-                .textFieldStyle(.roundedBorder)
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("Title", text: $titleField)
+                    .textFieldStyle(.roundedBorder)
+                
+                Toggle("Set due date", isOn: $dueDateEnabled)
+                
+                if dueDateEnabled {
+                    DatePicker(
+                        "Due",
+                        selection: $dueDateField,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                }
+                
+                Text("Notes (optional)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                TextField("Notes", text: $notesField, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                
+                Text("Tags (comma separated, optional)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                TextField("e.g. work, focus", text: $tagsField)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            Spacer(minLength: 0)
             
             HStack {
                 Button("Cancel") {
-                    showingAddSheet = false
-                    newItemTitle = ""
+                    resetEditor()
+                    showingEditor = false
                 }
                 .buttonStyle(.bordered)
                 
                 Spacer()
                 
-                Button("Add") {
-                    let newItem = TodoItem(title: newItemTitle)
-                    todoStore.addItem(newItem)
-                    showingAddSheet = false
-                    newItemTitle = ""
+                Button(editingItem == nil ? "Add" : "Save") {
+                    saveTask()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(newItemTitle.isEmpty)
+                .disabled(titleField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(24)
-        .frame(width: 400, height: 200)
+        .frame(width: 420)
+    }
+    
+    private func openEditorForNew() {
+        editingItem = nil
+        titleField = ""
+        notesField = ""
+        tagsField = ""
+        dueDateEnabled = false
+        dueDateField = Date()
+        showingEditor = true
+    }
+    
+    private func openEditorForEdit(_ item: TodoItem) {
+        editingItem = item
+        titleField = item.title
+        notesField = item.notes ?? ""
+        tagsField = item.tags.joined(separator: ", ")
+        if let due = item.dueDate {
+            dueDateEnabled = true
+            dueDateField = due
+        } else {
+            dueDateEnabled = false
+            dueDateField = Date()
+        }
+        showingEditor = true
+    }
+    
+    private func resetEditor() {
+        editingItem = nil
+        titleField = ""
+        notesField = ""
+        tagsField = ""
+        dueDateEnabled = false
+        dueDateField = Date()
+    }
+    
+    private func saveTask() {
+        let trimmedTitle = titleField.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        
+        let dueDate = dueDateEnabled ? dueDateField : nil
+        let trimmedNotes = notesField.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tags = tagsField
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        
+        if var editing = editingItem {
+            editing.title = trimmedTitle
+            editing.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+            editing.dueDate = dueDate
+            editing.tags = tags
+            editing.modifiedAt = Date()
+            todoStore.updateItem(editing)
+            
+            if permissionsManager.isRemindersAuthorized,
+               editing.remindersIdentifier != nil {
+                Task { try? await remindersSync.syncToReminders(editing) }
+            }
+        } else {
+            let newItem = TodoItem(
+                title: trimmedTitle,
+                notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
+                isCompleted: false,
+                dueDate: dueDate,
+                priority: .none,
+                tags: tags
+            )
+            todoStore.addItem(newItem)
+        }
+        
+        resetEditor()
+        showingEditor = false
     }
 }
 

@@ -294,7 +294,8 @@ struct MainWindowView: View {
     private var calendarView: some View {
         CalendarView(
             calendarManager: calendarManager,
-            permissionsManager: permissionsManager
+            permissionsManager: permissionsManager,
+            todoStore: todoStore
         )
     }
 

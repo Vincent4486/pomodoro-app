@@ -1,10 +1,9 @@
-# 🍅 Pomodoro App
-**Plan. Focus. Done.**
+# 🍅 Pomodoro
 
-**Pomodoro App** is a modern, distraction-free Pomodoro & focus timer designed for macOS.  
-It features session presets, long-break cycles, productivity summaries, ambient audio, and a macOS-inspired **glass / liquid glass UI**.
+**Pomodoro** is a macOS productivity app that connects focus sessions, Tasks, Reminders, and Calendar into a single workflow.  
+It is not just a timer — it links tasks, time, and focus, adapting to task-driven, time-blocking, or flow-based work styles. Pomodoro is built as a unified time system rather than a rigid productivity method, with a macOS-inspired **glass / liquid glass UI**.
 
-Version **1.0.0** marks the first stable milestone after extensive UI, architecture, and workflow refinement.
+Version **1.1.0** is a feature integration update that deepens system connections without a full redesign.
 
 <img width="320" height="320" alt="Firefly_Gemini Flash_Make it in to normal white background 328819" src="https://github.com/user-attachments/assets/629e345e-5540-4439-8e47-30f3db8c6cad" />
 
@@ -22,13 +21,18 @@ Version **1.0.0** marks the first stable milestone after extensive UI, architect
 ## Version status
 
 Current Version: <br>
-✅ 1.0.0
+✅ 1.1.0 (feature integration update; not a redesign)
 
-Update history: see history_versions/ for archived notes.
+Update history: see `History versions.md` for archived notes.
 
-### ⚠️ Beta Notes
-- UI/UX is still evolving
-- If there is any bugs, please add a issue
+## What’s New in v1.1.0
+
+- Task system with optional Reminders integration
+- Calendar view (Day / Week / Month)
+- Bidirectional sync foundations between Tasks and Reminders
+- Calendar as a visual layer for time-based planning
+- Improved permission handling for Calendar, Reminders, and Notifications
+- UX refinements related to planning and review
 
 ### 📌 Update Policy
 - Will receive more updates
@@ -37,6 +41,14 @@ Update history: see history_versions/ for archived notes.
 
 
 ## Changelog (short)
+
+## 1.1.0
+- Task system with optional Reminders integration
+- Calendar view (Day / Week / Month) with planning visual layer
+- Bidirectional sync foundations between Tasks and Reminders
+- Improved permission handling for Calendar, Reminders, and Notifications
+- UX refinements for planning and review
+- Feature integration update (not a redesign)
 
 ## 1.0.x
 -fully migrated to Swift
@@ -52,6 +64,8 @@ Update history: see history_versions/ for archived notes.
 - ⚡ Presets for quick switching (25/5, 50/10, 90/15, Custom)
 - ▶️ Start / Pause / Resume / Reset with clear state feedback
 - ⏳ Dedicated countdown timer mode
+- ✅ Tasks with optional Reminders integration and bidirectional sync foundations
+- 📅 Calendar views (Day / Week / Month) as a visual layer for planning
 - 🔔 Session-end pop-up reminder with optional sound
 - 📊 Daily productivity summary (focus time, sessions, breaks)
 - 💾 Automatic saving of daily stats
@@ -67,8 +81,6 @@ Pomodoro App is designed as a unified time system — not just a timer. It bring
 
 Instead of forcing a rigid productivity method, Pomodoro App **adapts to how you actually work — whether that’s time-blocking, task-driven planning, or flow-based focus**.
 
-This project is actively evolving, open to experimental features. Some features are simple by design, others intentionally powerful — but everything exists to help you **plan better, focus deeper, and finish with confidence**.
-
 ## 🚀 Running the App (1.0.0+ Swift)
 
 Using the official release or running with Xcode
@@ -77,7 +89,7 @@ Using the official release or running with Xcode
 
 ### 🔧 Requirements for Developing
 
-Install the following: Xcode
+Install the following: Xcode, macOS 14.6+
 
 ---
 
@@ -85,8 +97,9 @@ Install the following: Xcode
 
 The current UI uses a structured glass tile system inspired by macOS 26 (liquid glass).
 
-Version 1.0.x+ focuses on:
+Version 1.1.x focuses on:
 
+- Deepening Calendar, Reminders, and Tasks integration across the UI
 - Clean up UI
 - Updating macOS 15 style to macOS 26 liquid glass.
 
@@ -162,7 +175,7 @@ If you want to:
 
 You can open a Discussion or Issue instead of a PR.
 
-Constructive feedback is especially welcome during the current 0.6.x UI refinement phase.
+Constructive feedback is especially welcome during the current 1.x.x integration and planning phase.
 
 ## 🕰️ Legacy Systems (Archived)
 
@@ -218,16 +231,13 @@ An upcoming release for the native liquid glass support (currently macOS 15 styl
 
 ---
 
-### 🔔 Reminders (In-App Feature — In Progress)
-An upcoming in-app reminder system designed to gently notify users of important
+### 🔔 Reminders (Improvements)
+Continuing to extend the in-app reminder system introduced in v1.1.0 to gently notify users of important
 events without breaking focus.
 
 Current direction:
-- Reminders
-- Optional time-based reminders
-- Native system notifications (if supported)
-- Subtle, non-intrusive behavior by default
-- Fully optional and configurable
+- Feedback
+- General update
 
 The reminder system is intended to complement the Pomodoro workflow,
 not replace it or become distracting.

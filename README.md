@@ -250,14 +250,22 @@ Current direction:
 The reminder system is intended to complement the Pomodoro workflow,
 not replace it or become distracting.
 
-## Long-term Future Directions
+## Docs
+
+### Long-term Future Directions
 
 **Pomodoro App is free**.
 
 A small number of long-term ideas (AI features, cloud sync, deeper analytics) are being brainstormed.  
-No paid plan exists at this stage.
+**No paid plan exists at this stage.**
 
 Details: `docs/Future_Pro_Plan.md`
+
+### Development Roadmap
+
+The development direction from v1.x to v2.0 is documented here:
+
+`docs/Roadmap_1.0-2.0.md`
 
 ## 📈 Star History
 

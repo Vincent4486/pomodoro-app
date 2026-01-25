@@ -244,7 +244,7 @@ not replace it or become distracting.
 
 ## 📈 Star History
 
-[![Star History](https://api.star-history.com/svg?repos=T-1234567890/pomodoro-app&type=Date)](https://star-history.com/#T-1234567890/pomodoro-app)
+[![Star History Chart](https://api.star-history.com/svg?repos=T-1234567890/pomodoro-app&type=date&legend=top-left)](https://www.star-history.com/#T-1234567890/pomodoro-app&type=date&legend=top-left)
 
 ## ⚠️ 说明
 本项目仍在持续改进中，部分功能或界面可能会发生变化。

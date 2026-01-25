@@ -30,7 +30,7 @@ Version **1.1.0** is a feature integration update that deepens system connection
 Download the latest release from GitHub and run the app immediately: see Pomodoro v1.1.0 for the current build. Future releases will appear under Releases.
 
 - **Gatekeeper warning**: macOS may warn that the app is from an unidentified developer. This is expected while the project awaits Apple Developer Program approval.
-- **Bypass Gatekeeper safely**: follow the step‑by‑step guide in *docs/Gatekeeper.md* to open the downloaded app without compromising security.
+- **Bypass Gatekeeper safely**: follow the step‑by‑step guide in `docs/Gatekeeper.md` to open the downloaded app without compromising security.
 
 Once the Apple developer account is active, signed TestFlight and App Store builds will be provided.
 

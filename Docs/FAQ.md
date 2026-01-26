@@ -1,0 +1,186 @@
+# Pomodoro App · FAQ
+
+This FAQ answers common questions about Pomodoro App’s design choices, scope, and future direction.
+
+---
+
+## What is Pomodoro App?
+
+Pomodoro App is a **desktop-first macOS focus and planning tool**.
+
+It combines:
+- A lightweight Pomodoro / focus timer
+- Task management
+- Calendar & Reminders integration
+- A distraction-reduced Flow Mode
+
+The goal is not to replace existing tools, but to **bring focus, structure, and reflection together** in a calm desktop environment.
+
+---
+
+## Is Pomodoro App free?
+
+Yes.
+
+Pomodoro App is currently **free and open source**, and all core features remain free:
+- Timer and focus sessions
+- Tasks
+- Calendar & Reminders integration
+- Menu bar support
+- Local-first data storage
+
+There is **no active subscription**, and no paid features today.
+
+---
+
+## Is there a Pro or Plus plan?
+
+No — not at this stage.
+
+You may see documents discussing **future Pro / Plus ideas**, but these are:
+- Exploratory
+- Long-term
+- Not scheduled
+- Not implemented
+
+They exist to **share transparent thinking early**, not to announce pricing or lock features behind paywalls.
+
+---
+
+## Why talk about future paid plans at all?
+
+Some future ideas (AI features, cloud services, cross-device sync) involve **ongoing infrastructure costs**.
+
+If such features are ever introduced, a paid plan may exist **only to sustain development**, not to restrict the core app.
+
+Pomodoro App aims to avoid:
+- Surprise paywalls
+- Feature removal
+- Breaking existing workflows
+
+---
+
+## Why doesn’t Pomodoro App have an iOS or mobile app?
+
+This is an intentional design choice.
+
+Pomodoro App is built for **deep work**, which is better supported on a desktop:
+- Larger screen
+- Keyboard-driven workflows
+- Fewer interruptions
+- Longer attention spans
+
+Mobile devices are optimized for quick interactions and notifications, which often conflict with focused work.
+
+For this reason, Pomodoro App does **not plan to offer a full mobile app** in the foreseeable future.
+
+---
+
+## How do I add tasks or events on my phone?
+
+Mobile workflows are supported through **Apple’s system apps**:
+
+- **Apple Reminders** — quick task capture
+- **Apple Calendar** — scheduling and time blocks
+
+Pomodoro App syncs with Calendar and Reminders, allowing you to:
+1. Capture tasks or events on your phone
+2. Review, organize, and focus on them later on your Mac
+
+This keeps mobile usage lightweight while preserving a focused desktop experience.
+
+---
+
+## Does Pomodoro App sync data to the cloud?
+
+Currently:
+- Data is stored **locally**
+- Calendar and Reminders are synced via Apple’s system frameworks
+
+Future cloud sync ideas (e.g. backups, optional cross-device sync) are **exploratory only** and not implemented.
+
+---
+
+## What is “Bring Your Own AI Key” (BYO)?
+
+In the future, Pomodoro App may support a **Bring Your Own AI Key** mode for advanced users.
+
+This would allow users to:
+- Use their own AI provider
+- Experiment with AI features locally
+- Avoid managed services
+
+BYO mode would be:
+- Read-only
+- Advisory
+- User-controlled
+
+System-level automation would remain excluded.
+
+---
+
+## Is Pomodoro App open source?
+
+Yes.
+
+The client application is open source and developed in the open.
+
+If cloud or AI services are introduced in the future, those components may be separated for security reasons.
+
+---
+
+## Is Pomodoro App available on the Mac App Store?
+
+Not yet.
+
+Current distribution is via **GitHub Releases**.  
+The app is unsigned, and macOS Gatekeeper may show a warning on first launch.
+
+A signed App Store or TestFlight release may happen in the future, but it is not a prerequisite for ongoing development.
+
+---
+
+## Is Pomodoro App stable?
+
+Pomodoro App is under active development.
+
+Minor releases focus on:
+- Sync stability
+- UI improvements
+- Performance and reliability
+
+Feedback and bug reports are welcome.
+
+---
+
+## Where can I learn more about future plans?
+
+- Development roadmap: `docs/Roadmap_1.0-2.0.md`
+- Long-term ideas: `docs/Future_Pro_Plan.md`
+
+These documents describe **directional thinking**, not commitments.
+
+---
+
+## How can I contribute?
+
+You can contribute by:
+- Reporting bugs
+- Sharing feedback
+- Suggesting ideas
+- Submitting pull requests
+
+Even usage feedback helps guide development.
+
+---
+
+## Final note
+
+Pomodoro App is a long-term project.
+
+It prioritizes:
+- Focus over feature count
+- Sustainability over growth hacks
+- Transparency over surprises
+
+Thank you for trying it.

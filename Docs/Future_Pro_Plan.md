@@ -1,4 +1,4 @@
-# Pomodoro App · Future Pro Plan (Long-Term future planning-draft)
+# Pomodoro App · Future Plans (Long-Term, Exploratory)
 
 > ⚠️ This document describes **long-term, forward-looking ideas** for Pomodoro App.  
 > None of the features below are implemented today, and **no payment is required** at the current stage.
@@ -17,40 +17,46 @@ This document exists to:
 
 - Current version: **v1.x.x**
 - Distribution: GitHub Releases (unsigned)
-- Business model: **Free and Open source**
-- Pro plan: **Not launched / Not scheduled**
+- Business model: **Free and Open Source**
+- Subscription plans: **Not launched / Not scheduled**
 
 This is a **future concept**, not a commitment.
 
 ---
 
-## Why a Pro Plan Might Exist (In the Far Future)
+## Why Paid Plans Might Exist (In the Far Future)
 
-Some ideas under exploration go beyond what a fully local, offline app can reasonably support long-term:
+Pomodoro App is designed to remain useful without payment.
 
-- AI-assisted scheduling and summaries
-- Cross-device data synchronization
+However, some ideas under exploration go beyond what a fully local, offline app can reasonably sustain long-term:
+
+- AI-assisted reflection and summaries
+- Writing- and notes-focused AI features
 - Social or comparative features (e.g. leaderboards)
-- Long-term data aggregation
+- Long-term data aggregation and insights
 
 These introduce **real, recurring costs** (API usage, servers, maintenance).  
-A Pro plan would exist only to **sustain development**, not to restrict core usage.
+Any paid plan would exist only to **sustain development**, not to restrict core usage.
 
 ---
 
-## Bring Your Own AI Key (Out of pro plan)
+## Bring Your Own AI Key (Outside Subscription Plans)
 
-For advanced or experimental users, Pomodoro App may explore a **Bring Your Own AI Key** mode in the future.
+For advanced or experimental users, Pomodoro App may explore a **Bring Your Own AI Key** (BYO) mode.
 
 This mode is intended for users who prefer to:
-- Use their own AI provider (OpenAI, compatible APIs, etc.)
+- Use their own AI provider (OpenAI or compatible APIs)
 - Avoid managed services
-- Experiment with AI features locally
+- Experiment with AI features independently
 
 ### Scope & Limitations
 
-- This mode is **read-only by design**
-- AI can provide **advice, reflection, or suggestions**
+- BYO mode is **not part of Plus or Pro**
+- AI is **read-only by design**
+- AI may provide:
+  - Advice
+  - Reflection
+  - Suggestions
 - AI **cannot** modify:
   - Tasks
   - Calendar events
@@ -70,49 +76,81 @@ System-level automation (such as scheduling or calendar writes) is intentionally
 
 ---
 
-## Possible Pro Features (Exploratory)
+## Possible Subscription Structure (Exploratory)
 
 > All items below are **ideas**, not promises.
 
-### Flow Mode (Full Experience)
+### Plus — Core Tool + Light AI (Primary Tier)
 
-Flow Mode is a dedicated focus space designed for deep, uninterrupted work.
+Plus is envisioned as the **main supported tier**, covering most advanced functionality beyond the free core.
 
-In its complete form, Flow Mode may include:
-- A large, customizable clock (visual time awareness, not mandatory countdown)
+Possible Plus features may include:
+- Full Flow Mode experience
+- AI-assisted task drafting and rewriting
+- Lightweight productivity advice
+- Daily / weekly summaries
+- Local-first analytics and charts
+- Managed AI services using cost-efficient models
+
+Plus focuses on **enhancing the existing workflow**, not changing how users plan or decide.
+
+---
+
+### Pro — Includes Plus + Notes & Deep AI (Later Stage)
+
+Pro is envisioned as a **superset of Plus**, aimed at deeper thinking and writing.
+
+Pro may include everything in Plus, plus:
+- Notes and reflection analysis
+- Writing-focused AI assistance
+- Cross-task and long-term insights
+- Higher-quality AI models for lower-frequency, deeper use
+
+Pro features are expected to arrive **significantly later** (e.g. v3.0+) and are not part of near-term planning.
+
+---
+
+## Flow Mode (Core Experience)
+
+Flow Mode represents the long-term vision of Pomodoro App as a **focused workspace**, not just a timer.
+
+In its more complete form, Flow Mode may include:
+- A large, customizable clock for visual time awareness
 - Optional small countdown timer for session-based work
 - Automatic fullscreen entry to reduce distractions
 - Background blur or dimming
 - Custom background images or wallpapers
-- Minimal controls with keyboard-first interaction
+- Minimal UI with keyboard-first interaction
 
-Flow Mode is designed to feel like a **workspace**, not a control panel.
+Flow Mode is designed to feel like an environment, not a control panel.
 
-Some elements of Flow Mode may be limited or simplified outside of Pro, while the full experience is reserved for advanced use.
+Some advanced customization options may eventually be reserved for paid tiers, while the core Flow experience remains accessible.
+
+---
+
+## Additional Feature Ideas (Might requires different levels of subscriptions, Exploratory)
 
 ### Task States (Beyond Completion)
 
-Tasks may support multiple states beyond simple completion, allowing more realistic day-to-day planning.
-
-Possible task states include:
+Tasks may support multiple states beyond simple completion:
 - Planned
 - In Progress
 - Paused / Parked
 - Completed
 
-These states are intended to:
-- Reduce pressure caused by binary "done / not done" thinking
-- Better reflect real-world workflows
+These states aim to:
+- Reduce binary pressure
+- Reflect real-world workflows
 - Improve daily and weekly review experiences
 
-Task states focus on clarity and flexibility, not micromanagement.
+---
 
 ### AI-Assisted Planning & Reflection
-- Automatic time-block suggestions based on tasks and calendar gaps
-- Daily / weekly focus summaries
-- Lightweight insights (overload detection, consistency trends)
+- Focus summaries
+- Pattern observations
+- Overload or imbalance detection
 
-> Requires external AI APIs → likely Pro-only if implemented.
+> Would rely on external AI APIs → likely managed tiers only.
 
 ---
 
@@ -121,21 +159,21 @@ Task states focus on clarity and flexibility, not micromanagement.
 - Pattern recognition (focus vs. distraction)
 - Long-term trend analysis
 
-> Visualization would remain local; aggregation may use cloud storage.
+> Visualization would remain local; aggregation may use optional services.
 
 ---
 
-### Optional Cloud Sync
-- Cross-device sync (initially via iCloud)
+### Optional Cloud Features
 - Backup & restore
-- Optional account-based sync for non-Apple platforms (exploratory)
+- Optional leaderboards or shared statistics
+- Cross-device sync (initially via iCloud)
 
 ---
 
 ### Personalization & Focus Environment
 - Custom home backgrounds or images
 - Extended theming options
-- Advanced “Flow” focus modes (non-Pomodoro)
+- Advanced Flow focus modes (non-Pomodoro)
 
 ---
 
@@ -147,24 +185,21 @@ Task states focus on clarity and flexibility, not micromanagement.
 ---
 
 ### AI-Assisted Task Writing
-
-- Convert short notes or rough ideas into structured tasks
-- Improve task clarity (title, description, optional steps)
+- Convert rough ideas into structured tasks
+- Improve clarity (title, description, optional steps)
 - Suggest estimated effort or focus type
 
 ---
 
 ### AI-to-Task Creation
-
-- User provides creative or unstructured input (text, concepts, or visual references)
-- AI helps translate that input into actionable tasks
+- Translate unstructured input into actionable tasks
 - Tasks are **drafted**, not automatically scheduled
 
 ---
 
 ## Non-Goals
 
-The following are **explicitly not goals** for AI features:
+The following are **explicitly not goals**:
 
 - Fully autonomous scheduling without user approval
 - AI silently modifying calendars or tasks
@@ -176,21 +211,20 @@ Pomodoro App aims to assist focus, not override it.
 
 ## What Is Expected to Stay Free
 
-The goal is to keep Pomodoro App **useful without payment**:
-
-- Core timer & focus features
-- Task, calendar, and Reminders integration
+Pomodoro App should remain useful without payment:
+- Core timer and focus features
+- Tasks, Calendar, and Reminders integration
 - Menu bar support
-- Local data storage
+- Local-first data storage
 
-The app should never become unusable without Pro.
+The app should never become unusable without a subscription.
 
 ---
 
 ## Privacy & Philosophy
 
-- Free usage remains local-first
-- Pro features minimize data collection
+- Local-first by default
+- Minimal data collection
 - No selling user data
 - AI requests are scoped and non-persistent
 - No dark patterns or forced upgrades
@@ -199,17 +233,107 @@ The app should never become unusable without Pro.
 
 ## Estimated Pricing (Very Early Draft)
 
-> Pricing below is **not finalized** and may change significantly.
+> Pricing below is **illustrative only** and may change.
 
-- **US/International (USD)**
-  - $4.99/month
-  - $39/year
+### Plus
+- **US / International**
+  - $4.99 / month
+  - $39 / year
+- **China**
+  - ¥29 / month
+  - ¥229 / year
 
-- **China (RMB)**
-  - ¥29/month
-  - ¥229/year
+### Pro (Includes Plus)
+- **US / International**
+  - $7.99 / month
+  - $69 / year
+- **China**
+  - ¥49 / month
+  - ¥399 / year
 
-Final pricing may change based on real costs.
+---
+
+## Notes Direction (v3.0+, Early Exploration)
+
+Notes are **not part of the current 1.x or 2.x scope**.
+
+If introduced, a Notes system would arrive no earlier than **v3.0**, and would evolve Pomodoro App from a pure focus tool into a **time-aware thinking space**.
+
+### Positioning: Time-linked Knowledge Notes
+
+Notes are envisioned as:
+- More **knowledge-base–like** than simple reflections
+- More **structured** than plain text notes
+- Strongly **connected to time**, tasks, and focus sessions
+
+They are designed to help users:
+- Capture ideas while working
+- Accumulate understanding over time
+- Review how thinking evolves alongside actual work
+
+Notes are **not meant to replace** full-featured tools like Notion or Obsidian, but to serve a **different purpose**:
+thinking *with* time, not organizing everything.
+
+### Relationship to Time & Tasks
+
+Unlike traditional note apps, Notes may:
+- Be linked to focus sessions, days, or weeks
+- Reference tasks or projects implicitly
+- Surface notes based on *when* work happened, not just where they are stored
+
+Time acts as a **primary dimension**, not just metadata.
+
+### Assistant, Not Automation
+
+Notes may include an **AI assistant layer**, but with a clear boundary:
+
+- AI can help:
+  - Rewrite or clarify notes
+  - Summarize longer entries
+  - Extract key points
+  - Suggest follow-up questions or themes
+- AI cannot:
+  - Automatically restructure the knowledge base
+  - Enforce rigid schemas
+  - Replace user intent or writing style
+
+The assistant supports **thinking and writing**, not system-level automation.
+
+### Knowledge Without Heavy Structure
+
+The Notes system is expected to remain:
+- Lightweight
+- Low-friction
+- Opinionated but flexible
+
+Likely characteristics:
+- Minimal hierarchy
+- Optional tagging
+- No complex databases or block programming
+- Emphasis on review, recall, and continuity
+
+### Relationship to Pro Plan
+
+Because Notes involve:
+- Larger text context
+- Higher-quality AI models
+- Longer-term data handling
+
+Advanced Notes features and their AI assistance are currently envisioned as **Pro-only**, and **significantly later** than core Plus features.
+
+### Non-Goals
+
+Notes are explicitly **not intended** to:
+- Become a full documentation platform
+- Compete feature-for-feature with Notion
+- Replace existing personal knowledge systems
+
+The goal is to support **knowledge formed through focused work**, not to store everything.
+
+---
+
+> Notes are considered a **long-term evolution** of Pomodoro App,  
+> extending focus into understanding — without turning the app into a general workspace.
 
 ---
 

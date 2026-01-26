@@ -20,7 +20,7 @@ The goal is not to replace existing tools, but to **bring focus, structure, and 
 
 ## Is Pomodoro App free?
 
-Yes.
+**Yes.**
 
 Pomodoro App is currently **free and open source**, and all core features remain free:
 - Timer and focus sessions
@@ -87,13 +87,20 @@ Pomodoro App syncs with Calendar and Reminders, allowing you to:
 1. Capture tasks or events on your phone
 2. Review, organize, and focus on them later on your Mac
 
+For best experience, please type this before your task on Apple reminders:
+- `#pomodoro`
+- `#Pomodoro`
+- `#专注`
+- `#番茄`
+- `#番茄钟`
+
 This keeps mobile usage lightweight while preserving a focused desktop experience.
 
 ---
 
 ## Can I write tasks from my phone?
 
-Yes.
+**Yes.**
 
 You can:
 - Create tasks in Apple Reminders or Calendar
@@ -147,13 +154,59 @@ System-level automation would remain excluded.
 
 ## Is Pomodoro App open source?
 
-Yes.
+**Yes.**
 
 The client application is open source and developed in the open.
 
 If cloud or AI services are introduced in the future, those components may be separated for security reasons.
 
 ---
+
+## Why does Pomodoro App use a task ID?
+
+### Q: Why do some tasks sync correctly while others don’t?
+
+Pomodoro App uses a unique task ID (UUID) to reliably track tasks across:
+- The app itself
+- Apple Reminders
+- Apple Calendar
+
+This ID allows Pomodoro App to know **which task is which**, even if titles or times change.
+
+---
+
+### Q: Why not match tasks by title or date?
+
+Matching by title or date can easily break:
+- Two tasks may have the same name
+- Titles can change
+- Dates can be edited or removed
+
+A unique ID avoids duplication, mismatch, and accidental overwrites.
+
+---
+
+### Q: What happens if a task doesn’t have an ID?
+
+Tasks without a Pomodoro task ID are treated as **external or manual entries**.
+
+That means:
+- They are not modified automatically
+- They are not re-imported or duplicated
+- They remain fully visible and editable in Apple Reminders or Calendar
+
+This behavior is intentional and protects your data.
+
+---
+
+### Q: Do I need to care about IDs as a user?
+
+**No.**
+
+IDs are managed internally by Pomodoro App.
+You don’t need to create, copy, or understand them.
+
+Just write tasks naturally — the app handles the rest.
 
 ## Is Pomodoro App available on the Mac App Store?
 

@@ -77,7 +77,7 @@ The current version is fully native Swift; legacy Tauri/Svelte/Python versions a
 ## Version status
 
 Current Version: <br>
-✅ 1.1.0 (feature integration update; not a redesign)
+✅ 1.5.0
 
 Update history: see `History versions.md` for archived notes.
 
@@ -88,20 +88,9 @@ Update history: see `History versions.md` for archived notes.
 
 ## Changelog (short)
 
-## 1.1.0
-- Task system with optional Reminders integration
-- Calendar view (Day / Week / Month) with planning visual layer
-- Bidirectional sync foundations between Tasks and Reminders
-- Improved permission handling for Calendar, Reminders, and Notifications
-- UX refinements for planning and review
-- Feature integration update (not a redesign)
-
-## 1.0.x
-- fully migrated to Swift
-- Major UI polish and layout refinement
-- New sidebar-based navigation
-- Improved glass / background blur rendering
-- Stability improvements
+## 1.5.0
+- Add flow mode
+- UI update for music and audio panel
 
 ## Current UI Direction
 

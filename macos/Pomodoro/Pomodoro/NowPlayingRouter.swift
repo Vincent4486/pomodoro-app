@@ -103,6 +103,10 @@ final class NowPlayingRouter: ObservableObject {
             apply(state: apple, provider: appleProvider)
         } else if spotify.isPlaying {
             apply(state: spotify, provider: spotifyProvider)
+        } else if apple.isRunning {
+            apply(state: apple, provider: appleProvider)
+        } else if spotify.isRunning {
+            apply(state: spotify, provider: spotifyProvider)
         } else {
             clearState()
         }

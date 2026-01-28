@@ -7,14 +7,15 @@ struct FlowModeView: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var showsCountdown: Bool = true
+    // Countdown overlay is opt-in; default off to keep the clock calm (time awareness, not urgency).
+    var showsCountdown: Bool = false
     var exitAction: () -> Void = {}
 
     @State private var now = Date()
     @State private var countdownVisible: Bool
     private let clockTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    init(showsCountdown: Bool = true, exitAction: @escaping () -> Void = {}) {
+    init(showsCountdown: Bool = false, exitAction: @escaping () -> Void = {}) {
         self.showsCountdown = showsCountdown
         self.exitAction = exitAction
         _countdownVisible = State(initialValue: showsCountdown)
@@ -22,17 +23,12 @@ struct FlowModeView: View {
 
     var body: some View {
         ZStack {
-            // Lightweight background to differentiate Flow from regular panes without fullscreen/blur.
-            LinearGradient(
-                colors: [
-                    Color(.sRGB, red: 0.96, green: 0.97, blue: 1.0, opacity: 1.0),
-                    Color(.sRGB, red: 0.92, green: 0.95, blue: 0.99, opacity: 0.8),
-                    Color(.sRGB, red: 0.90, green: 0.93, blue: 0.98, opacity: 0.6)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // macOS-first backdrop: real vibrancy keeps Flow Mode light without adding new textures.
+            VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                .ignoresSafeArea()
+            // Subtle veil to calm high-contrast wallpapers; intentionally faint to preserve negative space.
+            Color.white.opacity(0.04)
+                .ignoresSafeArea()
 
             VStack(alignment: .center, spacing: 0) {
                 topBar
@@ -45,12 +41,15 @@ struct FlowModeView: View {
                 Spacer()
 
                 AmbientAudioStrip()
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 12)
             }
             .padding(.horizontal, 28)
-            .padding(.vertical, 24)
+            .padding(.vertical, 20) // a touch more negative space; Flow should feel lighter than main app
         }
         .onReceive(clockTimer) { now = $0 }
+        // Flow Mode is a presentation-only context: entering/leaving must not alter timers or tasks.
+        .onAppear { appState.isInFlowMode = true }
+        .onDisappear { appState.isInFlowMode = false }
     }
 
     // MARK: - UI Sections
@@ -68,28 +67,23 @@ struct FlowModeView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 6) {
                 Button {
-                    // Placeholder: timer toggle will be added later.
+                    handleTimerTap()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "timer")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Timer (coming soon)")
+                            .font(.title3.weight(.semibold))
+                        Text("Timer")
                             .font(.subheadline.weight(.semibold))
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.primary.opacity(0.08))
+                    )
                 }
-                .buttonStyle(.borderless)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.primary.opacity(0.04))
-                )
-                .foregroundStyle(.secondary)
-                .disabled(true)
-
-                Text("Optional · not required for Flow")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show Pomodoro timer")
             }
 
             Button(action: exitAction) {
@@ -109,6 +103,7 @@ struct FlowModeView: View {
             }
             .buttonStyle(.plain)
             .help("Return to main workspace")
+            .keyboardShortcut(.escape, modifiers: [])
             .accessibilityLabel("Exit Flow Mode")
         }
     }
@@ -116,24 +111,28 @@ struct FlowModeView: View {
     private var clockStack: some View {
         VStack(spacing: 8) {
             Text(timeString)
-                .font(.system(size: 92, weight: .bold, design: .rounded).monospacedDigit())
+                .font(clockFont)
+                // Fixed neutral tone: Flow clock should not signal urgency or timer state.
+                .foregroundStyle(Color.primary.opacity(0.9))
                 .kerning(-0.8)
-                .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 5)
+                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 10)
+                .layoutPriority(1) // keep the clock dominant; prevents compression by surrounding content
+                .accessibilityLabel("Current time")
 
-            if shouldShowCountdown {
-                countdownChip
+            if shouldShowTimerChip {
+                timerChip
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    private var countdownChip: some View {
+    private var timerChip: some View {
         HStack(spacing: 8) {
-            Image(systemName: isCountdownRunning ? "timer" : "pause.circle")
+            Image(systemName: timerIconName)
                 .font(.callout)
-            Text(countdownTimeString)
+            Text(timerTimeString)
                 .font(.headline.monospacedDigit())
-            Text(isCountdownRunning ? "running" : "paused")
+            Text(timerStatusLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -147,12 +146,25 @@ struct FlowModeView: View {
             Capsule(style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         )
+        // Overlay is intentionally lightweight; tap pauses/resumes, long-press or secondary click hides.
+        .onTapGesture { toggleActiveTimer() }
+        .onLongPressGesture { countdownVisible.toggle() }
+        .gesture(
+            TapGesture()
+                .modifiers(.command) // secondary-like quick hide
+                .onEnded { countdownVisible.toggle() }
+        )
     }
 
     // MARK: - Helpers
 
     private var timeString: String {
-        now.formatted(date: .omitted, time: .shortened)
+        // Intentionally excludes seconds to avoid anxious ticking; minutes-only time awareness.
+        now.formatted(
+            .dateTime
+                .hour(.defaultDigits(amPM: .abbreviated))
+                .minute(.twoDigits)
+        )
     }
 
     private var countdownTimeString: String {
@@ -162,76 +174,257 @@ struct FlowModeView: View {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    private var shouldShowCountdown: Bool {
-        guard countdownVisible else { return false }
-        return isCountdownRunning || isCountdownActive
+    private var timerTimeString: String {
+        let totalSeconds = max(0, appState.pomodoro.remainingSeconds)
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    private var isCountdownRunning: Bool {
-        appState.countdown.state == .running
+    private var shouldShowTimerChip: Bool {
+        appState.pomodoro.state != .idle
     }
 
-    private var isCountdownActive: Bool {
-        appState.countdown.state == .paused || appState.countdown.state == .running
+    // MARK: - Clock styling
+
+    private var clockFont: Font {
+        // Large type keeps the clock the visual center without adding motion.
+        .system(size: 104, weight: .heavy, design: .rounded).monospacedDigit()
+    }
+
+    // MARK: - Timer wiring (observes existing engines, never duplicates logic)
+
+    private enum ActiveTimer {
+        case pomodoro(state: TimerState, remaining: Int)
+        case countdown(state: TimerState, remaining: Int)
+    }
+
+    private var currentActiveTimer: ActiveTimer? {
+        if appState.pomodoro.state != .idle {
+            return .pomodoro(state: appState.pomodoro.state, remaining: appState.pomodoro.remainingSeconds)
+        }
+        if appState.countdown.state != .idle {
+            return .countdown(state: appState.countdown.state, remaining: appState.countdown.remainingSeconds)
+        }
+        return nil
+    }
+
+    private var activeTimerRemainingSeconds: Int {
+        switch currentActiveTimer {
+        case .pomodoro(_, let remaining): return remaining
+        case .countdown(_, let remaining): return remaining
+        case .none: return appState.pomodoro.remainingSeconds
+        }
+    }
+
+    private var timerIconName: String {
+        switch appState.pomodoro.state {
+        case .running, .breakRunning:
+            return "timer"
+        case .paused, .breakPaused:
+            return "pause.circle"
+        case .idle:
+            return "timer"
+        }
+    }
+
+    private var timerStatusLabel: String {
+        switch appState.pomodoro.state {
+        case .running:
+            return "running"
+        case .breakRunning:
+            return "break"
+        case .paused, .breakPaused:
+            return "paused"
+        case .idle:
+            return "ready"
+        }
+    }
+
+    private func handleTimerTap() {
+        // Reveal timer state and control the shared Pomodoro engine.
+        countdownVisible = true
+        startOrTogglePomodoro()
+    }
+
+    private func toggleActiveTimer() {
+        switch appState.pomodoro.state {
+        case .idle:
+            appState.startPomodoro()
+        case .running, .breakRunning:
+            appState.pomodoro.pause()
+        case .paused, .breakPaused:
+            appState.pomodoro.resume()
+        }
+    }
+
+    private func startOrTogglePomodoro() {
+        switch appState.pomodoro.state {
+        case .idle:
+            appState.startPomodoro()
+        case .running, .breakRunning:
+            appState.pomodoro.pause()
+        case .paused, .breakPaused:
+            appState.pomodoro.resume()
+        }
     }
 }
 
 // MARK: - Ambient Audio
 
 private struct AmbientAudioStrip: View {
-    @State private var ambientVolume: Double = 0.65
-    var isPlaying: Bool = false
-    var title: String = "Ambient sound"
-    var subtitle: String = "Optional background audio to support focus"
-    var onToggle: () -> Void = {}
+    @EnvironmentObject private var musicController: MusicController
+    @EnvironmentObject private var audioSourceStore: AudioSourceStore
+    @State private var ambientVolume: Double = 0.4
 
     var body: some View {
-        HStack(spacing: 14) {
-            Button(action: onToggle) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 40, height: 40)
-                    .foregroundStyle(.primary)
-                    .background(
-                        Circle()
-                            .fill(Color.primary.opacity(0.06))
-                    )
+        Group {
+            if audioSourceStore.externalMediaDetected, let media = audioSourceStore.externalMediaMetadata {
+                externalStrip(media)
+            } else {
+                ambientStrip
             }
-            .buttonStyle(.plain)
-            .disabled(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Slider(value: $ambientVolume, in: 0...1)
-                .frame(width: 140)
-                .tint(.primary.opacity(0.6))
-                .disabled(true)
-                // UI-only affordance; audio engine does not expose volume yet.
-                .accessibilityLabel("Ambient volume")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .frame(maxWidth: 560)
+        .frame(maxWidth: 620)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
+                .fill(.ultraThinMaterial)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .onAppear {
+            ambientVolume = Double(musicController.focusVolume)
+        }
+    }
+
+    private var ambientStrip: some View {
+        HStack(spacing: 14) {
+            Button(action: toggleAmbient) {
+                Image(systemName: musicController.playbackState == .playing ? "pause.fill" : "play.fill")
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 42, height: 42)
+                    .foregroundStyle(.primary)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 10) {
+                soundIcon
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .cornerRadius(6)
+                    .foregroundStyle(.primary.opacity(0.85))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ambientTitle)
+                        .font(.subheadline.weight(.semibold))
+                    Text("Ambient · Local")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Slider(
+                value: $ambientVolume,
+                in: 0...1,
+                minimumValueLabel: Image(systemName: "speaker.wave.1.fill").foregroundStyle(.secondary),
+                maximumValueLabel: Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary),
+                label: { EmptyView() }
+            )
+            .frame(width: 180)
+            .tint(.primary.opacity(0.65))
+            .accessibilityLabel("Ambient volume")
+            .onChange(of: ambientVolume) { _, newValue in
+                audioSourceStore.setVolume(Float(newValue))
+            }
+        }
+    }
+
+    private func externalStrip(_ media: ExternalMedia) -> some View {
+        HStack(spacing: 14) {
+            artwork(for: media)
+                .frame(width: 52, height: 52)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Now Playing · \(media.source.displayName)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(media.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(media.artist)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+        }
+    }
+
+    private func toggleAmbient() {
+        audioSourceStore.togglePlayPause()
+    }
+
+    private var ambientTitle: String {
+        if case .ambient(let type) = audioSourceStore.audioSource {
+            return type.displayName
+        }
+        return musicController.currentFocusSound == .off ? "White Noise" : musicController.currentFocusSound.displayName
+    }
+
+    private var soundIcon: Image {
+        switch musicController.currentFocusSound {
+        case .white, .off:
+            return Image(systemName: "waveform")
+        case .brown:
+            return Image(systemName: "wind")
+        case .rain:
+            return Image(systemName: "cloud.rain")
+        case .wind:
+            return Image(systemName: "wind.circle")
+        }
+    }
+
+    @ViewBuilder
+    private func artwork(for media: ExternalMedia) -> some View {
+        if let artwork = media.artwork {
+            Image(nsImage: artwork)
+                .resizable()
+                .scaledToFill()
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.quaternary)
+                Image(systemName: "music.note")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
 #Preview {
+    let appState = AppState()
+    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
+    let audioSourceStore: AudioSourceStore = MainActor.assumeIsolated {
+        let externalMonitor = ExternalAudioMonitor()
+        let externalController = ExternalPlaybackController()
+        return AudioSourceStore(
+            musicController: musicController,
+            externalMonitor: externalMonitor,
+            externalController: externalController
+        )
+    }
     FlowModeView()
-        .environmentObject(AppState())
+        .environmentObject(appState)
+        .environmentObject(musicController)
+        .environmentObject(audioSourceStore)
 }

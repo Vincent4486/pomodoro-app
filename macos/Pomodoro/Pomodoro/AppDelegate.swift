@@ -25,6 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             configureControllersIfNeeded()
         }
     }
+    var audioSourceStore: AudioSourceStore? {
+        didSet {
+            configureControllersIfNeeded()
+        }
+    }
     var onboardingState: OnboardingState?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -43,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func openMainWindow() {
-        guard let appState, let musicController else { return }
+        guard let appState, let musicController, let audioSourceStore else { return }
 
         if let window = mainWindow ?? existingWindow() {
             focus(window: window)
@@ -60,8 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.contentViewController = NSHostingController(
             rootView: ContentView()
                 .environmentObject(appState)
-                .environmentObject(appState.nowPlayingRouter)
                 .environmentObject(musicController)
+                .environmentObject(audioSourceStore)
                 .environmentObject(onboardingState ?? OnboardingState())
         )
         window.applyPomodoroWindowChrome()

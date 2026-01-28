@@ -25,6 +25,8 @@ final class AmbientNoiseEngine {
         var randomSeedR: UInt32
         var brownL: Float
         var brownR: Float
+        var whiteLpfL: Float
+        var whiteLpfR: Float
         var rainLpfL: Float
         var rainLpfR: Float
         var windLowL: Float
@@ -70,6 +72,7 @@ final class AmbientNoiseEngine {
                     type: type,
                     white: whiteL,
                     brownState: &state.brownL,
+                    whiteLpf: &state.whiteLpfL,
                     rainLpf: &state.rainLpfL,
                     windLow: &state.windLowL,
                     windHigh: &state.windHighL,
@@ -80,6 +83,7 @@ final class AmbientNoiseEngine {
                     type: type,
                     white: whiteR,
                     brownState: &state.brownR,
+                    whiteLpf: &state.whiteLpfR,
                     rainLpf: &state.rainLpfR,
                     windLow: &state.windLowR,
                     windHigh: &state.windHighR,
@@ -95,6 +99,8 @@ final class AmbientNoiseEngine {
             self.state.randomSeedR = state.randomSeedR
             self.state.brownL = state.brownL
             self.state.brownR = state.brownR
+            self.state.whiteLpfL = state.whiteLpfL
+            self.state.whiteLpfR = state.whiteLpfR
             self.state.rainLpfL = state.rainLpfL
             self.state.rainLpfR = state.rainLpfR
             self.state.windLowL = state.windLowL
@@ -109,6 +115,7 @@ final class AmbientNoiseEngine {
     }()
     private let format: AVAudioFormat
     private let sampleRate: Double = 44_100
+    private let whiteAlpha: Float
     private let rainAlpha: Float
     private let windLowAlpha: Float
     private let windHighAlpha: Float
@@ -122,17 +129,20 @@ final class AmbientNoiseEngine {
             preconditionFailure("Failed to create standard audio format with sample rate \(sampleRate) and 2 channels")
         }
         format = standardAudioFormat
+        whiteAlpha = AmbientNoiseEngine.alpha(for: 4500, sampleRate: sampleRate) // soft low-pass to reduce harshness
         rainAlpha = AmbientNoiseEngine.alpha(for: 1200, sampleRate: sampleRate)
         windLowAlpha = AmbientNoiseEngine.alpha(for: 2000, sampleRate: sampleRate)
         windHighAlpha = AmbientNoiseEngine.alpha(for: 200, sampleRate: sampleRate)
         rainPhaseIncrement = Float(2.0 * Double.pi * 0.5 / sampleRate)
         state = State(
             type: .off,
-            volume: 0.25,
+            volume: 0.18, // slightly softer default to avoid ear fatigue
             randomSeedL: 0x12345678,
             randomSeedR: 0x87654321,
             brownL: 0,
             brownR: 0,
+            whiteLpfL: 0,
+            whiteLpfR: 0,
             rainLpfL: 0,
             rainLpfR: 0,
             windLowL: 0,
@@ -210,6 +220,7 @@ final class AmbientNoiseEngine {
         type: NoiseType,
         white: Float,
         brownState: inout Float,
+        whiteLpf: inout Float,
         rainLpf: inout Float,
         windLow: inout Float,
         windHigh: inout Float,
@@ -219,24 +230,27 @@ final class AmbientNoiseEngine {
         case .off:
             return 0
         case .white:
-            return white
+            // Gentle low-pass and attenuation to reduce harshness for long listening.
+            whiteLpf += (white - whiteLpf) * whiteAlpha
+            return whiteLpf * 0.75
         case .brown:
             brownState = (brownState + white * 0.02) / 1.02
             return brownState * 3.5
         case .rain:
+            // Smooth low-pass plus mild modulation for continuity; keeps loop seamless.
             rainLpf += (white - rainLpf) * rainAlpha
             rainPhase += rainPhaseIncrement
             if rainPhase > Float.pi * 2 {
                 rainPhase -= Float.pi * 2
             }
-            let mod = 0.65 + 0.35 * sin(rainPhase)
+            let mod = 0.88 + 0.12 * sin(rainPhase) // gentler movement, no hard dips
             return rainLpf * 0.7 * mod
         case .wind:
             brownState = (brownState + white * 0.02) / 1.02
             windLow += (brownState - windLow) * windLowAlpha
             windHigh += (brownState - windHigh) * windHighAlpha
-            let band = (windLow - windHigh) * 1.4
-            return band
+            let band = (windLow - windHigh) * 0.9 // calmer, less modulation
+            return band * 0.85
         }
     }
 

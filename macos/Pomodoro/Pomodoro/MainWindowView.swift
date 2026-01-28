@@ -14,6 +14,7 @@ import Charts
 struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var musicController: MusicController
+    @EnvironmentObject private var audioSourceStore: AudioSourceStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workMinutesText = ""
     @State private var shortBreakMinutesText = ""
@@ -32,6 +33,7 @@ struct MainWindowView: View {
     @State private var todayFocusMinutes: Int = 0
     @State private var completionRate: Double = 0
     private let eventStore = EKEventStore()
+    @State private var lastNonFlowSelection: SidebarItem = .pomodoro
     
     // New: Calendar, Reminders, and Todo system
     @StateObject private var permissionsManager = PermissionsManager.shared
@@ -66,6 +68,14 @@ struct MainWindowView: View {
                 syncDurationTexts()
                 syncLongBreakInterval()
             }
+            .onChange(of: sidebarSelection) { _, newValue in
+                if newValue != .flow {
+                    lastNonFlowSelection = newValue
+                    appState.isInFlowMode = false
+                } else {
+                    appState.isInFlowMode = true
+                }
+            }
             .onChange(of: focusedField) { _, newValue in
                 guard newValue == nil else { return }
                 commitDuration(.work)
@@ -78,6 +88,21 @@ struct MainWindowView: View {
             }
             .onChange(of: appState.countdown.state) { oldValue, newValue in
                 triggerCountdownStateAnimation(from: oldValue, to: newValue)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToFlow)) { _ in
+                withAnimation {
+                    sidebarSelection = .flow
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToTasks)) { _ in
+                withAnimation {
+                    sidebarSelection = .tasks
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToCalendar)) { _ in
+                withAnimation {
+                    sidebarSelection = .calendar
+                }
             }
 
             if appState.transitionPopup != nil || appState.notificationPopup != nil {
@@ -237,7 +262,7 @@ struct MainWindowView: View {
     private var flowModeView: some View {
         FlowModeView(exitAction: {
             withAnimation {
-                sidebarSelection = .pomodoro
+                sidebarSelection = lastNonFlowSelection
             }
         })
     }
@@ -316,21 +341,10 @@ struct MainWindowView: View {
 
     private var audioAndMusicView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Ambient Sound")
-                    .font(.system(.headline, design: .rounded))
-                    .foregroundStyle(.secondary)
-                Picker("Ambient Sound", selection: ambientSoundBinding) {
-                    ForEach(FocusSoundType.allCases) { sound in
-                        Text(sound.displayName)
-                            .tag(sound)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            MediaControlBar()
-                .environmentObject(appState.nowPlayingRouter)
+            nowPlayingSection
+            Divider()
+                .padding(.vertical, 4)
+            sourceSelector
         }
         .padding(.top, 28)
         .padding(.horizontal)
@@ -418,19 +432,6 @@ struct MainWindowView: View {
         }
     }
 
-    private var ambientSoundBinding: Binding<FocusSoundType> {
-        Binding(
-            get: { musicController.currentFocusSound },
-            set: { newValue in
-                if newValue == .off {
-                    musicController.stopFocusSound()
-                } else {
-                    musicController.startFocusSound(newValue)
-                }
-            }
-        )
-    }
-
     private func openNotificationSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Notifications") else {
             return
@@ -480,6 +481,216 @@ struct MainWindowView: View {
             }
         }
         openCalendarSettings()
+    }
+
+    // MARK: - Audio UI
+
+    private var nowPlayingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Now Playing")
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(.primary)
+
+            switch audioSourceStore.audioSource {
+            case .external(let media):
+                HStack(alignment: .center, spacing: 14) {
+                    externalArtwork(media)
+                        .frame(width: 64, height: 64)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(media.title)
+                            .font(.system(.title3, design: .rounded).weight(.semibold))
+                            .lineLimit(1)
+                        Text(media.artist)
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(media.source.displayName)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        audioSourceStore.togglePlayPause()
+                    } label: {
+                        Image(systemName: "playpause.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 42, height: 42)
+                            .foregroundStyle(.white)
+                            .background(Circle().fill(Color.accentColor))
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Volume (system)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Slider(value: .constant(Double(musicController.focusVolume)), in: 0...1)
+                            .disabled(true)
+                    }
+                    .frame(width: 200)
+                }
+
+            case .ambient(let type):
+                HStack(alignment: .center, spacing: 14) {
+                    ambientIcon(for: type)
+                        .font(.system(size: 30, weight: .semibold))
+                        .frame(width: 64, height: 64)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.primary.opacity(0.08))
+                        )
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(type.displayName)
+                            .font(.system(.title3, design: .rounded).weight(.semibold))
+                        Text("Ambient · Local")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        audioSourceStore.togglePlayPause()
+                    } label: {
+                        Image(systemName: musicController.playbackState == .playing ? "pause.fill" : "play.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 42, height: 42)
+                            .foregroundStyle(.white)
+                            .background(Circle().fill(Color.accentColor))
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Volume")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Slider(value: ambientVolumeBinding, in: 0...1)
+                    }
+                    .frame(width: 200)
+                }
+
+            case .off:
+                HStack(alignment: .center, spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.secondary.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "waveform")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("No audio playing")
+                            .font(.system(.title3, design: .rounded).weight(.semibold))
+                        Text("Start Apple Music, Spotify, or select an ambient sound")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var sourceSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Audio Source")
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(.primary)
+
+            HStack(spacing: 10) {
+                selectorButton(
+                    title: "External",
+                    isActive: externalActive,
+                    isDisabled: !externalActive,
+                    action: { }
+                )
+
+                ForEach(FocusSoundType.allCases.filter { $0 != .off }, id: \.self) { type in
+                    selectorButton(
+                        title: type.displayName,
+                        isActive: currentAmbient == type,
+                        isDisabled: externalActive,
+                        action: { audioSourceStore.selectAmbient(type) }
+                    )
+                }
+            }
+        }
+    }
+
+    private func selectorButton(title: String, isActive: Bool, isDisabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(isActive ? .white : .primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isActive ? Color.accentColor : Color.primary.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.45 : 1.0)
+    }
+
+    private var ambientVolumeBinding: Binding<Double> {
+        Binding(
+            get: { Double(musicController.focusVolume) },
+            set: { newValue in
+                audioSourceStore.setVolume(Float(newValue))
+            }
+        )
+    }
+
+    private var externalActive: Bool {
+        if case .external = audioSourceStore.audioSource { return true }
+        return false
+    }
+
+    private var currentAmbient: FocusSoundType? {
+        if case .ambient(let type) = audioSourceStore.audioSource {
+            return type
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private func externalArtwork(_ media: ExternalMedia) -> some View {
+        if let artwork = media.artwork {
+            Image(nsImage: artwork)
+                .resizable()
+                .scaledToFill()
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+                Image(systemName: "music.note")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func ambientIcon(for type: FocusSoundType) -> Image {
+        switch type {
+        case .white, .off:
+            return Image(systemName: "waveform")
+        case .brown:
+            return Image(systemName: "wind")
+        case .rain:
+            return Image(systemName: "cloud.rain")
+        case .wind:
+            return Image(systemName: "wind.circle")
+        }
     }
 
     private func handleRemindersAccessRequest() {
@@ -1200,11 +1411,29 @@ struct MainWindowView: View {
     }
 }
 
+// MARK: - Menu bar navigation hooks
+extension Notification.Name {
+    static let navigateToFlow = Notification.Name("navigateToFlow")
+    static let navigateToTasks = Notification.Name("navigateToTasks")
+    static let navigateToCalendar = Notification.Name("navigateToCalendar")
+}
+
 #if DEBUG && PREVIEWS_ENABLED
 #Preview {
     let appState = AppState()
+    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
+    let audioSourceStore = MainActor.assumeIsolated {
+        let externalMonitor = ExternalAudioMonitor()
+        let externalController = ExternalPlaybackController()
+        AudioSourceStore(
+            musicController: musicController,
+            externalMonitor: externalMonitor,
+            externalController: externalController
+        )
+    }
     MainWindowView()
         .environmentObject(appState)
-        .environmentObject(MusicController(ambientNoiseEngine: appState.ambientNoiseEngine))
+        .environmentObject(musicController)
+        .environmentObject(audioSourceStore)
 }
 #endif

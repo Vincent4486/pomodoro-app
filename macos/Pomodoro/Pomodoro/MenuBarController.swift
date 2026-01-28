@@ -262,6 +262,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         countdownItem.submenu = countdownMenu
         menu.addItem(countdownItem)
         menu.addItem(.separator())
+        menu.addItem(actionItem(title: "Flow", action: #selector(openFlow)))
+        menu.addItem(actionItem(title: "Tasks", action: #selector(openTasks)))
+        menu.addItem(actionItem(title: "Calendar", action: #selector(openCalendar)))
+        menu.addItem(.separator())
         menu.addItem(musicMenuItem())
         menu.addItem(.separator())
         menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
@@ -458,6 +462,22 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func openApp() {
         openMainWindow()
+    }
+
+    // MARK: - Navigation (UI-only; no timer logic changes)
+    @objc private func openFlow() {
+        openMainWindow()
+        NotificationCenter.default.post(name: .navigateToFlow, object: nil)
+    }
+
+    @objc private func openTasks() {
+        openMainWindow()
+        NotificationCenter.default.post(name: .navigateToTasks, object: nil)
+    }
+
+    @objc private func openCalendar() {
+        openMainWindow()
+        NotificationCenter.default.post(name: .navigateToCalendar, object: nil)
     }
 
     @objc private func toggleMusicPlayback() {

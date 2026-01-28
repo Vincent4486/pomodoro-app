@@ -8,56 +8,31 @@
 import SwiftUI
 
 struct MediaControlBar: View {
-    @EnvironmentObject private var nowPlaying: NowPlayingRouter
+    @EnvironmentObject private var audioSourceStore: AudioSourceStore
 
     var body: some View {
         HStack(spacing: 12) {
-            if nowPlaying.isAvailable {
-                artworkView
+            if case .external(let media) = audioSourceStore.audioSource {
+                artworkView(for: media)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(nowPlaying.title)
+                    Text("Now Playing · \(media.source.displayName)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Text(media.title)
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text("\(nowPlaying.artist) • \(nowPlaying.sourceName)")
+                    Text(media.artist)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
-
-                Button {
-                    nowPlaying.previousTrack()
-                } label: {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .background(Circle().fill(.ultraThinMaterial))
-
-                Button {
-                    nowPlaying.playPause()
-                } label: {
-                    Image(systemName: nowPlaying.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .background(Circle().fill(.ultraThinMaterial))
-
-                Button {
-                    nowPlaying.nextTrack()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .background(Circle().fill(.ultraThinMaterial))
             } else {
                 ZStack {
                     Circle()
@@ -69,12 +44,12 @@ struct MediaControlBar: View {
                 .frame(width: 32, height: 32)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("No supported music playing")
+                    Text("No external music playing")
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text("Start Apple Music or Spotify")
+                    Text("Start Apple Music or Spotify to switch automatically")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -93,8 +68,8 @@ struct MediaControlBar: View {
     }
 
     @ViewBuilder
-    private var artworkView: some View {
-        if let artwork = nowPlaying.artwork {
+    private func artworkView(for media: ExternalMedia) -> some View {
+        if let artwork = media.artwork {
             Image(nsImage: artwork)
                 .resizable()
                 .scaledToFill()
@@ -115,8 +90,19 @@ struct MediaControlBar: View {
 
 #if DEBUG && PREVIEWS_ENABLED
 #Preview {
+    let appState = AppState()
+    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
+    let audioSourceStore = MainActor.assumeIsolated {
+        let externalMonitor = ExternalAudioMonitor()
+        let externalController = ExternalPlaybackController()
+        AudioSourceStore(
+            musicController: musicController,
+            externalMonitor: externalMonitor,
+            externalController: externalController
+        )
+    }
     MediaControlBar()
-        .environmentObject(NowPlayingRouter())
+        .environmentObject(audioSourceStore)
         .padding()
 }
 #endif

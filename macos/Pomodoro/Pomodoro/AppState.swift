@@ -50,6 +50,9 @@ final class AppState: ObservableObject {
             requestNotificationAuthorizationIfNeeded()
         }
     }
+    // UI-only flag: Flow Mode is a presentation context, not a data/pomodoro state.
+    // This is intentionally not persisted and must not trigger timer resets.
+    @Published var isInFlowMode: Bool = false
     @Published private(set) var transitionPopup: TransitionPopup?
     @Published private(set) var notificationPopup: NotificationPopup?
 

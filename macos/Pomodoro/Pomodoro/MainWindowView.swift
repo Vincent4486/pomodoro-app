@@ -179,6 +179,9 @@ struct MainWindowView: View {
                     .font(.system(size: 72, weight: .heavy, design: .default).monospacedDigit())
                     .scaleEffect(pomodoroStatePulse ? 1.0 : 0.98)
                     .opacity(pomodoroStatePulse ? 1.0 : 0.94)
+                    .contentTransition(.numericText())
+                    // Flow-mode-inspired gentle tick dissolve to keep time feeling fluid.
+                    .animation(mainTimerUpdateAnimation, value: appState.pomodoro.remainingSeconds)
                     .animation(timerStateAnimation, value: pomodoroStatePulse)
                 Text("State: \(labelForPomodoroState(appState.pomodoro.state))")
                     .font(.system(size: 15, weight: .medium, design: .default))
@@ -284,6 +287,8 @@ struct MainWindowView: View {
                     .font(.system(size: 72, weight: .heavy, design: .default).monospacedDigit())
                     .scaleEffect(countdownStatePulse ? 1.0 : 0.98)
                     .opacity(countdownStatePulse ? 1.0 : 0.94)
+                    .contentTransition(.numericText())
+                    .animation(mainTimerUpdateAnimation, value: appState.countdown.remainingSeconds)
                     .animation(timerStateAnimation, value: countdownStatePulse)
                 Text("State: \(appState.countdown.state.rawValue.capitalized)")
                     .font(.system(size: 15, weight: .medium, design: .default))
@@ -1420,6 +1425,11 @@ struct MainWindowView: View {
     private var timerStateAnimation: Animation? {
         // Calm, lightweight easing for state transitions and numeric pulse.
         reduceMotion ? nil : .easeOut(duration: 0.22)
+    }
+    
+    private var mainTimerUpdateAnimation: Animation? {
+        // Subtle dissolve for ticking seconds; keeps the timer feeling fluid.
+        reduceMotion ? nil : .easeOut(duration: 0.14)
     }
 
     private var sectionTransition: AnyTransition {

@@ -124,6 +124,9 @@ struct MainWindowView: View {
             }
         }
         .background(WindowBackgroundConfigurator())
+        // macOS 26 adds an opaque toolbar strip; hide that layer so the wallpaper blur flows
+        // into the title bar while keeping native window controls intact.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .animation(reduceMotion ? .linear(duration: 0.2) : .easeInOut(duration: 0.25),
                    value: appState.transitionPopup?.id)
         .animation(reduceMotion ? .linear(duration: 0.2) : .easeInOut(duration: 0.25),

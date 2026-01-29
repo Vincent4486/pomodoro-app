@@ -55,16 +55,14 @@ extension NSWindow {
         // Hide the textual title while keeping the chrome area
         title = ""
         titleVisibility = .hidden
+        // Let AppKit draw its native titlebar material; keep it transparent so our blur can show through.
         titlebarAppearsTransparent = true
         titlebarSeparatorStyle = .none
         styleMask.formUnion([.titled, .fullSizeContentView, .closable, .miniaturizable, .resizable])
-        toolbar = nil
+        toolbarStyle = .unified
         isMovableByWindowBackground = true
 
         showTrafficLights()
-
-        // Ensure vibrancy can pass through
-        contentView?.wantsLayer = true
     }
 
     private func showTrafficLights() {

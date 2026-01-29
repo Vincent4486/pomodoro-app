@@ -36,6 +36,9 @@ struct MainWindowView: View {
             }
         }
         .background(WindowBackgroundConfigurator())
+        // macOS 26 shows an opaque toolbar background by default; hide it so our wallpaper blur
+        // continues through the title bar while keeping native traffic lights.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .task {
             // Connect to system media after first render to prevent blocking main thread
             #if DEBUG

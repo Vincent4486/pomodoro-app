@@ -31,6 +31,7 @@ struct PomodoroApp: App {
                     }
                 }
         }
+        .windowToolbarStyle(.unified)
     }
 
     private func focusMainWindow() {

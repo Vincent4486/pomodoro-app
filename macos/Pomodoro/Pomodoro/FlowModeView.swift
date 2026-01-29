@@ -13,6 +13,7 @@ struct FlowModeView: View {
 
     @State private var now = Date()
     @State private var countdownVisible: Bool
+    @State private var isPresented = false
     @State private var timerHovering = false
     @GestureState private var timerPressing = false
     @State private var exitHovering = false
@@ -50,10 +51,21 @@ struct FlowModeView: View {
             .padding(.horizontal, 28)
             .padding(.vertical, 20) // a touch more negative space; Flow should feel lighter than main app
         }
+        // Enter/exit feel like settling in: fade + slight scale with Apple-like easing.
+        .opacity(flowOpacity)
+        .scaleEffect(flowScale)
         .onReceive(clockTimer) { now = $0 }
         // Flow Mode is a presentation-only context: entering/leaving must not alter timers or tasks.
-        .onAppear { appState.isInFlowMode = true }
-        .onDisappear { appState.isInFlowMode = false }
+        .onAppear {
+            appState.isInFlowMode = true
+            guard !reduceMotion else { isPresented = true; return }
+            withAnimation(.easeOut(duration: 0.25)) { isPresented = true }
+        }
+        .onDisappear {
+            appState.isInFlowMode = false
+            guard !reduceMotion else { return }
+            withAnimation(.easeOut(duration: 0.20)) { isPresented = false }
+        }
     }
 
     // MARK: - UI Sections
@@ -137,6 +149,9 @@ struct FlowModeView: View {
                 .kerning(-0.8)
                 .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 10)
                 .layoutPriority(1) // keep the clock dominant; prevents compression by surrounding content
+                // Calm numeric morph to reduce tick anxiety.
+                .contentTransition(.numericText())
+                .animation(timeUpdateAnimation, value: timeString)
                 .accessibilityLabel("Current time")
 
             if shouldShowTimerChip {
@@ -152,6 +167,8 @@ struct FlowModeView: View {
                 .font(.callout)
             Text(timerTimeString)
                 .font(.headline.monospacedDigit())
+                .contentTransition(.numericText())
+                .animation(timeUpdateAnimation, value: timerTimeString)
             Text(timerStatusLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -299,6 +316,21 @@ private extension FlowModeView {
     var exitScale: CGFloat {
         guard !reduceMotion else { return 1.0 }
         return exitPressing ? 0.98 : 1.0
+    }
+    
+    var flowScale: CGFloat {
+        guard !reduceMotion else { return 1.0 }
+        return isPresented ? 1.0 : 0.98
+    }
+    
+    var flowOpacity: Double {
+        guard !reduceMotion else { return 1.0 }
+        return isPresented ? 1.0 : 0.0
+    }
+    
+    var timeUpdateAnimation: Animation? {
+        // Very light easing to make digits "flow" instead of tick.
+        reduceMotion ? nil : .easeOut(duration: 0.18)
     }
 }
 

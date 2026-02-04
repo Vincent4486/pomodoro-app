@@ -25,6 +25,11 @@ Version **1.1.0** is a feature integration update that deepens system connection
 >## ⚠️ Notice
 > If the app still ask for calendar&reminders permissions after you activate, please quit and restart the app
 
+## 🌐 Our official website
+
+Explore the project website for design philosophies, documentation, and downloads:<br>
+👉 https://t-1234567890.github.io/pomodoro-app/
+
 ## 🚀 Try it now
 
 Download the latest release from GitHub and run the app immediately: see Pomodoro v1.1.0 for the current build. Future releases will appear under Releases.

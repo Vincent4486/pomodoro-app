@@ -78,6 +78,10 @@ If you prefer not to build from source, download the binary from the latest rele
 Requires Xcode on macOS 14.6 or later.
 Clone this repository, open the project in Xcode, and build/run as usual.
 
+**Requirements:** <br>
+- GoogleSignIn dependency (>= 7.0)
+- Xcode on macOS 14.6 or later
+
 The current version is fully native Swift; legacy Tauri/Svelte/Python versions are archived.
 
 ## Version status

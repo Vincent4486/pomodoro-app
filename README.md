@@ -102,9 +102,23 @@ Update history: see `History versions.md` for archived notes.
 
 ## Changelog (short)
 
-## 1.5.0
+### 1.5.0
 - Add flow mode
 - UI update for music and audio panel
+
+## 🚀 Coming next: TestFlight
+
+Apple TestFlight preview builds are launching soon. <br>
+Pomodoro App is **transitioning** to Apple's distribution (TestFlight → App Store). <br>
+
+Join the waitlist:
+https://forms.gle/hQ7ubqxt39sXca4e9
+
+Why join TestFlight waitlist? <br>
+- Access to upcoming official builds
+- Early access to the Apple release channel
+- Smooth transition to the App Store version  
+- Help shape the future direction before public launch
 
 ## Current UI Direction
 

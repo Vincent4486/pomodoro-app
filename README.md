@@ -28,7 +28,7 @@ Version **1.1.0** is a feature integration update that deepens system connection
 ## 🌐 Our official website
 
 Explore the project website for design philosophies, documentation, and downloads:<br>
-👉  http://pomodoro-app.tech
+👉  https://pomodoro-app.tech
 
 ## 🚀 Try it now
 

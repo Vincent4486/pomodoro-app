@@ -163,7 +163,7 @@ final class RemindersSync: ObservableObject {
     private func triggerAutoSync(reason: String) async {
         guard isAutoSyncEnabled else { return }
         guard isSyncAvailable else {
-            lastSyncError = "Auto-sync requires Reminders access."
+            lastSyncError = LocalizationManager.shared.text("tasks.sync.auto_requires_reminders_access")
             return
         }
         guard !isSyncing else { return }
@@ -187,7 +187,7 @@ final class RemindersSync: ObservableObject {
             todoStore?.objectWillChange.send()
             return true
         } catch {
-            lastSyncError = "Auto-sync (\(mode)) failed: \(error.localizedDescription)"
+            lastSyncError = LocalizationManager.shared.format("tasks.sync.auto_failed_format", mode, error.localizedDescription)
             return false
         }
     }

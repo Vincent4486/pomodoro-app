@@ -29,7 +29,7 @@ final class CalendarManager: ObservableObject {
     /// Safety: this is a READ-ONLY refresh for Calendar UI; it must not create or modify tasks.
     func fetchEvents(from startDate: Date, to endDate: Date) async {
         guard isAuthorized else {
-            error = "Calendar access not authorized"
+            error = LocalizationManager.shared.text("calendar.error.not_authorized")
             return
         }
         
@@ -167,11 +167,11 @@ final class CalendarManager: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .notAuthorized:
-                return "Calendar access not authorized"
+                return LocalizationManager.shared.text("calendar.error.not_authorized")
             case .failedToCreate:
-                return "Failed to create calendar event"
+                return LocalizationManager.shared.text("calendar.error.create_failed")
             case .notEditable:
-                return "One or more events cannot be modified"
+                return LocalizationManager.shared.text("calendar.error.not_editable")
             }
         }
     }

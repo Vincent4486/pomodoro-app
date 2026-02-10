@@ -47,10 +47,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
         
         var displayName: String {
             switch self {
-            case .none: return "None"
-            case .low: return "Low"
-            case .medium: return "Medium"
-            case .high: return "High"
+            case .none: return LocalizationManager.shared.text("priority.none")
+            case .low: return LocalizationManager.shared.text("priority.low")
+            case .medium: return LocalizationManager.shared.text("priority.medium")
+            case .high: return LocalizationManager.shared.text("priority.high")
             }
         }
     }

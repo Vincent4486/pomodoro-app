@@ -1,0 +1,3 @@
+"NSCalendarsUsageDescription" = "Allow access to read your calendars for scheduling.";
+"NSRemindersUsageDescription" = "Allow access to sync your reminders and tasks.";
+"NSUserNotificationUsageDescription" = "Allow notifications so we can alert you about timers and reminders.";

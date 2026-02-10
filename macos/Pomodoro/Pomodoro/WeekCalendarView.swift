@@ -6,6 +6,7 @@ struct WeekCalendarView: View {
     let days: [Date]
     let events: [EKEvent]
     let tasks: [TodoItem]
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     @State private var selectedDay: Date?
     
@@ -27,6 +28,7 @@ struct WeekCalendarView: View {
                             isSelected: isSameDay(day, selectedDay),
                             onSelect: { selectedDay = day }
                         )
+                        .environmentObject(localizationManager)
                         .frame(minWidth: columnWidth, maxWidth: columnWidth, alignment: .topLeading)
                     }
                 }
@@ -74,6 +76,7 @@ private struct DayColumnView: View {
     let tasks: [TodoItem]
     let isSelected: Bool
     let onSelect: () -> Void
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     private static let dayFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -84,6 +87,7 @@ private struct DayColumnView: View {
     private static let timeFormatter: DateFormatter = {
         let df = DateFormatter()
         df.timeStyle = .short
+        df.locale = .autoupdatingCurrent
         return df
     }()
     
@@ -91,7 +95,7 @@ private struct DayColumnView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Self.dayFormatter.string(from: date))
+                    Text(dayLabelString(date))
                         .font(.subheadline)
                     Text(dayNumberString(date))
                         .font(.caption)
@@ -101,7 +105,7 @@ private struct DayColumnView: View {
             }
             
             if events.isEmpty && tasks.isEmpty {
-                Text("No events")
+                Text(localizationManager.text("calendar.no_events"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -135,17 +139,22 @@ private struct DayColumnView: View {
     }
     
     private func dayNumberString(_ date: Date) -> String {
-        let df = DateFormatter()
-        df.dateFormat = "EEEE"
-        return df.string(from: date)
+        Self.weekdayFormatter.locale = localizationManager.effectiveLocale
+        return Self.weekdayFormatter.string(from: date)
+    }
+
+    private func dayLabelString(_ date: Date) -> String {
+        Self.dayFormatter.locale = localizationManager.effectiveLocale
+        return Self.dayFormatter.string(from: date)
     }
     
     private struct EventCard: View {
         let event: EKEvent
+        @EnvironmentObject private var localizationManager: LocalizationManager
         
         var body: some View {
             VStack(alignment: .leading, spacing: 4) {
-                Text(event.title ?? "Untitled")
+                Text(event.title ?? localizationManager.text("common.untitled"))
                     .font(.subheadline)
                     .lineLimit(1)
                 Text(timeRange(event))
@@ -160,8 +169,9 @@ private struct DayColumnView: View {
         
         private func timeRange(_ event: EKEvent) -> String {
             if event.isAllDay {
-                return "All day"
+                return localizationManager.text("calendar.all_day")
             }
+            DayColumnView.timeFormatter.locale = localizationManager.effectiveLocale
             let formatter = DayColumnView.timeFormatter
             return "\(formatter.string(from: event.startDate)) – \(formatter.string(from: event.endDate))"
         }
@@ -169,6 +179,7 @@ private struct DayColumnView: View {
     
     private struct TaskCard: View {
         let task: TodoItem
+        @EnvironmentObject private var localizationManager: LocalizationManager
         
         var body: some View {
             VStack(alignment: .leading, spacing: 4) {
@@ -181,12 +192,12 @@ private struct DayColumnView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("All day")
+                        Text(localizationManager.text("calendar.all_day"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("No due time")
+                    Text(localizationManager.text("calendar.no_due_time"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -198,9 +209,17 @@ private struct DayColumnView: View {
         }
         
         private func timeRange(from start: Date, duration: Int?) -> String {
+            DayColumnView.timeFormatter.locale = localizationManager.effectiveLocale
             let formatter = DayColumnView.timeFormatter
             let end = start.addingTimeInterval(Double((duration ?? 30) * 60))
             return "\(formatter.string(from: start)) – \(formatter.string(from: end))"
         }
     }
+
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        formatter.locale = .autoupdatingCurrent
+        return formatter
+    }()
 }

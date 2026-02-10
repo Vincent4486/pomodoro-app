@@ -10,9 +10,9 @@ final class APIClient {
 
         var errorDescription: String? {
             switch self {
-            case .invalidEndpoint: return "Unable to form endpoint URL."
-            case .authRequired: return "Authentication is required."
-            case .missingToken: return "Missing Firebase ID token."
+            case .invalidEndpoint: return LocalizationManager.shared.text("api.error.invalid_endpoint")
+            case .authRequired: return LocalizationManager.shared.text("api.error.auth_required")
+            case .missingToken: return LocalizationManager.shared.text("api.error.missing_token")
             }
         }
     }
@@ -149,21 +149,21 @@ final class AIProxyClient {
         var errorDescription: String? {
             switch self {
             case .invalidEndpoint:
-                return "Unable to form aiProxy endpoint URL."
+                return LocalizationManager.shared.text("api.error.aiproxy_invalid_endpoint")
             case .unauthorized:
-                return "Authentication required (401)."
+                return LocalizationManager.shared.text("api.error.aiproxy_unauthorized")
             case .forbidden(let message):
-                return message ?? "Access forbidden (403)."
+                return message ?? LocalizationManager.shared.text("api.error.aiproxy_forbidden")
             case .quotaExceeded(let message):
-                return message ?? "Quota exceeded (429)."
+                return message ?? LocalizationManager.shared.text("api.error.aiproxy_quota_exceeded")
             case .decodingFailed:
-                return "Failed to decode aiProxy response."
+                return LocalizationManager.shared.text("api.error.aiproxy_decoding_failed")
             case .invalidResponse:
-                return "Invalid response from aiProxy."
+                return LocalizationManager.shared.text("api.error.aiproxy_invalid_response")
             case .network(let error):
                 return error.localizedDescription
             case .http(let statusCode, let message):
-                return message ?? "aiProxy request failed with status \(statusCode)."
+                return message ?? LocalizationManager.shared.format("api.error.aiproxy_http_status", statusCode)
             }
         }
     }

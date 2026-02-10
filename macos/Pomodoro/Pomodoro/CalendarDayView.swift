@@ -6,6 +6,7 @@ import EventKit
 struct CalendarDayView: View {
     let date: Date
     let events: [EKEvent]
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     var body: some View {
         if events.isEmpty {
@@ -21,7 +22,7 @@ struct CalendarDayView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             
-            Text("No events today")
+            Text(localizationManager.text("calendar.no_events_today"))
                 .font(.headline)
                 .foregroundStyle(.secondary)
         }
@@ -71,9 +72,8 @@ struct CalendarDayView: View {
     
     private func hourLabel(_ hour: Int) -> String {
         let date = Calendar.current.date(from: DateComponents(hour: hour)) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "ha"
-        return formatter.string(from: date)
+        Self.hourFormatter.locale = localizationManager.effectiveLocale
+        return Self.hourFormatter.string(from: date)
     }
     
     @ViewBuilder
@@ -84,7 +84,7 @@ struct CalendarDayView: View {
                 .frame(width: 8, height: 8)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.title ?? "Untitled")
+                Text(event.title ?? localizationManager.text("common.untitled"))
                     .font(.caption)
                     .fontWeight(.medium)
                 
@@ -102,10 +102,23 @@ struct CalendarDayView: View {
     }
     
     private func formatEventTime(_ event: EKEvent) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        let start = formatter.string(from: event.startDate)
-        let end = formatter.string(from: event.endDate)
+        Self.timeFormatter.locale = localizationManager.effectiveLocale
+        let start = Self.timeFormatter.string(from: event.startDate)
+        let end = Self.timeFormatter.string(from: event.endDate)
         return "\(start) - \(end)"
     }
+
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "ha"
+        formatter.locale = .autoupdatingCurrent
+        return formatter
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.locale = .autoupdatingCurrent
+        return formatter
+    }()
 }

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MusicPanelView: View {
     @EnvironmentObject private var localMusicPlayer: LocalMusicPlayer
+    @EnvironmentObject private var localizationManager: LocalizationManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -31,11 +32,11 @@ struct MusicPanelView: View {
                 }
                 .font(.system(size: 18, weight: .semibold))
 
-                Text(localMusicPlayer.currentTrackName ?? "Unknown Track")
+                Text(localMusicPlayer.currentTrackName ?? localizationManager.text("audio.unknown_track"))
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(.secondary)
             } else {
-                Button("Choose Music") {
+                Button(localizationManager.text("audio.choose_music")) {
                     localMusicPlayer.loadFiles()
                 }
                 .buttonStyle(.borderedProminent)

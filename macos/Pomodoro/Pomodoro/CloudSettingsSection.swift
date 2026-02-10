@@ -3,16 +3,17 @@ import FirebaseAuth
 
 struct CloudSettingsSection: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @State private var email = ""
     @State private var password = ""
     @State private var mode: AuthMode = .signIn
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Account")
+            Text(localizationManager.text("settings.account.title"))
                 .font(.title3.bold())
 
-            Text("Login is optional. Sign in to unlock premium features.")
+            Text(localizationManager.text("settings.account.subtitle"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -32,9 +33,9 @@ struct CloudSettingsSection: View {
             HStack(spacing: 12) {
                 avatarView(url: authViewModel.user?.photoURL)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(authViewModel.user?.displayName ?? "Signed in")
+                    Text(authViewModel.user?.displayName ?? localizationManager.text("settings.account.signed_in"))
                         .font(.headline)
-                    Text(authViewModel.currentUserEmail.isEmpty ? "No email provided" : authViewModel.currentUserEmail)
+                    Text(authViewModel.currentUserEmail.isEmpty ? localizationManager.text("settings.account.no_email") : authViewModel.currentUserEmail)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -42,7 +43,7 @@ struct CloudSettingsSection: View {
                 statusChip(isLoggedIn: true)
             }
 
-            Button("Logout") {
+            Button(localizationManager.text("settings.account.logout")) {
                 authViewModel.signOut()
             }
             .buttonStyle(.bordered)
@@ -57,9 +58,9 @@ struct CloudSettingsSection: View {
                 Spacer()
             }
 
-            Picker("Mode", selection: $mode) {
-                Text("Sign In").tag(AuthMode.signIn)
-                Text("Sign Up").tag(AuthMode.signUp)
+            Picker(localizationManager.text("settings.account.mode"), selection: $mode) {
+                Text(localizationManager.text("auth.mode.sign_in")).tag(AuthMode.signIn)
+                Text(localizationManager.text("auth.mode.sign_up")).tag(AuthMode.signUp)
             }
             .pickerStyle(.segmented)
 
@@ -75,7 +76,7 @@ struct CloudSettingsSection: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "g.circle.fill")
-                    Text(mode == .signUp ? "Continue with Google" : "Sign in with Google")
+                    Text(mode == .signUp ? localizationManager.text("auth.continue_google") : localizationManager.text("auth.signin_google"))
                     Spacer()
                     if authViewModel.isLoading {
                         ProgressView()
@@ -89,12 +90,12 @@ struct CloudSettingsSection: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
-                TextField("Email", text: $email)
+                TextField(localizationManager.text("auth.email.placeholder"), text: $email)
                     .textFieldStyle(.roundedBorder)
                     .textContentType(.emailAddress)
                     .disabled(authViewModel.isLoading)
 
-                SecureField("Password", text: $password)
+                SecureField(localizationManager.text("auth.password.placeholder"), text: $password)
                     .textFieldStyle(.roundedBorder)
                     .textContentType(mode == .signUp ? .newPassword : .password)
                     .disabled(authViewModel.isLoading)
@@ -116,7 +117,7 @@ struct CloudSettingsSection: View {
                 }
             } label: {
                 HStack {
-                    Text(mode == .signUp ? "Create Account" : "Sign In with Email")
+                    Text(mode == .signUp ? localizationManager.text("auth.create_account") : localizationManager.text("auth.signin_email"))
                     Spacer()
                     if authViewModel.isLoading {
                         ProgressView()
@@ -140,7 +141,7 @@ struct CloudSettingsSection: View {
             Circle()
                 .fill(isLoggedIn ? Color.green : Color.orange.opacity(0.65))
                 .frame(width: 10, height: 10)
-            Text(isLoggedIn ? "Logged in" : "Optional login")
+            Text(isLoggedIn ? localizationManager.text("settings.account.logged_in") : localizationManager.text("settings.account.optional_login"))
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
         }
@@ -210,13 +211,14 @@ struct CloudSettingsSection: View {
 
 struct LoginSheetView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var localizationManager: LocalizationManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             CloudSettingsSection()
             HStack {
                 Spacer()
-                Button("Close") {
+                Button(localizationManager.text("common.close")) {
                     dismiss()
                 }
                 .buttonStyle(.bordered)

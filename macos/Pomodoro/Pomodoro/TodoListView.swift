@@ -8,6 +8,7 @@ struct TodoListView: View {
     @ObservedObject var planningStore: PlanningStore
     @ObservedObject var remindersSync: RemindersSync
     @ObservedObject var permissionsManager: PermissionsManager
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     @State private var showingEditor = false
     @State private var editingItem: TodoItem?
@@ -29,9 +30,9 @@ struct TodoListView: View {
     private static let taskHintDefaultsKey = "com.pomodoro.taskHintShown"
     
     private enum Segment: String, CaseIterable, Identifiable {
-        case active = "Active"
-        case completed = "Completed"
-        
+        case active
+        case completed
+
         var id: String { rawValue }
     }
     
@@ -63,11 +64,11 @@ struct TodoListView: View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 8) {
-                Text("Tasks")
+                Text(localizationManager.text("tasks.title"))
                     .font(.largeTitle)
                     .fontWeight(.bold)
                 
-                Text("Your task list with optional Reminders sync")
+                Text(localizationManager.text("tasks.subtitle"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -92,7 +93,7 @@ struct TodoListView: View {
             // Toolbar
             HStack {
                 Button(action: { openEditorForNew() }) {
-                    Label("Add Task", systemImage: "plus")
+                    Label(localizationManager.text("tasks.add_task"), systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
                 
@@ -104,10 +105,10 @@ struct TodoListView: View {
                             HStack {
                                 ProgressView()
                                     .controlSize(.small)
-                                Text("Syncing…")
+                                Text(localizationManager.text("tasks.syncing"))
                             }
                         } else {
-                            Label("Sync All Tasks", systemImage: "arrow.triangle.2.circlepath")
+                            Label(localizationManager.text("tasks.sync_all_tasks"), systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -117,8 +118,8 @@ struct TodoListView: View {
                 Spacer()
                 
                 Picker("", selection: $selectedSegment) {
-                    Text("Active").tag(Segment.active)
-                    Text("Completed").tag(Segment.completed)
+                    Text(localizationManager.text("tasks.segment.active")).tag(Segment.active)
+                    Text(localizationManager.text("tasks.segment.completed")).tag(Segment.completed)
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 220)
@@ -128,10 +129,10 @@ struct TodoListView: View {
             
             if let last = remindersSync.lastSyncDate {
                 HStack {
-                    Text("Last sync: \(Self.lastSyncFormatter.string(from: last))")
+                    Text(localizationManager.format("tasks.last_sync_format", formatLastSyncDate(last)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Toggle("Auto-sync", isOn: $remindersSync.isAutoSyncEnabled)
+                    Toggle(localizationManager.text("tasks.auto_sync"), isOn: $remindersSync.isAutoSyncEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
                     Spacer()
@@ -187,17 +188,17 @@ struct TodoListView: View {
                 .foregroundStyle(.orange)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Reminders Sync Disabled")
+                Text(localizationManager.text("tasks.reminders_sync_disabled.title"))
                     .font(.headline)
                 
-                Text("Enable Reminders access to sync tasks with Apple Reminders.")
+                Text(localizationManager.text("tasks.reminders_sync_disabled.body"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             
             Spacer()
             
-            Button("Enable") {
+            Button(localizationManager.text("permissions.enable")) {
                 Task {
                     await permissionsManager.requestRemindersPermission()
                 }
@@ -209,30 +210,30 @@ struct TodoListView: View {
         .cornerRadius(8)
         .padding(.horizontal, 32)
         .padding(.bottom, 12)
-        .alert("Reminders Access Denied", isPresented: $permissionsManager.showRemindersDeniedAlert) {
-            Button("Open Settings") {
+        .alert(localizationManager.text("tasks.reminders_access_denied.title"), isPresented: $permissionsManager.showRemindersDeniedAlert) {
+            Button(localizationManager.text("common.open_settings")) {
                 permissionsManager.openSystemSettings()
             }
-            Button("Cancel", role: .cancel) { }
+            Button(localizationManager.text("common.cancel"), role: .cancel) { }
         } message: {
-            Text("Reminders access allows you to sync tasks with Apple Reminders. You can enable it in System Settings → Privacy & Security → Reminders.")
+            Text(localizationManager.text("tasks.reminders_access_denied.body"))
         }
     }
 
     private var planningOverview: some View {
         HStack(spacing: 10) {
             planningPill(
-                title: "Planned",
+                title: localizationManager.text("tasks.planned"),
                 value: "\(plannedTaskCount)",
                 color: .green
             )
             planningPill(
-                title: "Unplanned",
+                title: localizationManager.text("tasks.unplanned"),
                 value: "\(unplannedTaskCount)",
                 color: .orange
             )
             planningPill(
-                title: "Planned Today",
+                title: localizationManager.text("tasks.planned_today"),
                 value: "\(plannedTodayCount)",
                 color: .blue
             )
@@ -264,11 +265,11 @@ struct TodoListView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             
-            Text("No tasks")
+            Text(localizationManager.text("tasks.empty.title"))
                 .font(.headline)
                 .foregroundStyle(.secondary)
             
-            Text("Add a task to get started")
+            Text(localizationManager.text("tasks.empty.subtitle"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -284,14 +285,9 @@ struct TodoListView: View {
                 .foregroundStyle(.yellow)
             
             VStack(alignment: .leading, spacing: 6) {
-                Text("Write tasks naturally. #pomodoro is optional.")
+                Text(localizationManager.text("tasks.hint.title"))
                     .font(.headline)
-                Text("""
-Add a # to mark a task as focused work (totally optional):
-• Finish biology notes #pomodoro / #专注
-• Prepare slides for Monday #番茄 / #番茄钟
-This does not start a timer or schedule time—tasks work fine without #.
-""")
+                Text(localizationManager.text("tasks.hint.body"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
@@ -353,7 +349,7 @@ This does not start a timer or schedule time—tasks work fine without #.
                         Image(systemName: "target")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("Marked for focused work (#pomodoro / #专注 / #番茄 / #番茄钟)")
+                        Text(localizationManager.text("tasks.focus_marked"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -385,11 +381,11 @@ This does not start a timer or schedule time—tasks work fine without #.
                     }
                     
                     if item.reminderIdentifier != nil {
-                        Label("Synced", systemImage: "checkmark.icloud")
+                        Label(localizationManager.text("tasks.status.synced"), systemImage: "checkmark.icloud")
                             .font(.caption)
                             .foregroundStyle(.green)
                     } else if item.syncToCalendar, (item.linkedCalendarEventId ?? item.calendarEventIdentifier) != nil {
-                        Label("In Calendar", systemImage: "calendar.badge.checkmark")
+                        Label(localizationManager.text("tasks.status.in_calendar"), systemImage: "calendar.badge.checkmark")
                             .font(.caption)
                             .foregroundStyle(.green)
                     }
@@ -399,7 +395,7 @@ This does not start a timer or schedule time—tasks work fine without #.
                             .font(.caption)
                             .foregroundStyle(.blue)
                     } else if !item.isCompleted {
-                        Label("Unplanned", systemImage: "calendar.badge.exclamationmark")
+                        Label(localizationManager.text("tasks.unplanned"), systemImage: "calendar.badge.exclamationmark")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -416,13 +412,13 @@ This does not start a timer or schedule time—tasks work fine without #.
                                 try? await remindersSync.syncTask(item)
                             }
                         }) {
-                            Label("Sync to Reminders", systemImage: "arrow.triangle.2.circlepath")
+                            Label(localizationManager.text("tasks.action.sync_to_reminders"), systemImage: "arrow.triangle.2.circlepath")
                         }
                     } else {
                         Button(action: {
                             remindersSync.unsyncFromReminders(item)
                         }) {
-                            Label("Unsync from Reminders", systemImage: "xmark.icloud")
+                            Label(localizationManager.text("tasks.action.unsync_from_reminders"), systemImage: "xmark.icloud")
                         }
                     }
                     
@@ -432,20 +428,20 @@ This does not start a timer or schedule time—tasks work fine without #.
                 Button {
                     openEditorForEdit(item)
                 } label: {
-                    Label("Edit", systemImage: "pencil")
+                    Label(localizationManager.text("common.edit"), systemImage: "pencil")
                 }
 
                 if item.dueDate == nil {
                     Button {
                         planTaskForToday(item)
                     } label: {
-                        Label("Plan for Today", systemImage: "calendar.badge.plus")
+                        Label(localizationManager.text("tasks.action.plan_for_today"), systemImage: "calendar.badge.plus")
                     }
                 } else {
                     Button {
                         clearPlanDate(for: item)
                     } label: {
-                        Label("Remove Plan Date", systemImage: "calendar.badge.minus")
+                        Label(localizationManager.text("tasks.action.remove_plan_date"), systemImage: "calendar.badge.minus")
                     }
                 }
                 
@@ -457,7 +453,7 @@ This does not start a timer or schedule time—tasks work fine without #.
                     }
                     todoStore.deleteItem(item)
                 }) {
-                    Label("Delete", systemImage: "trash")
+                    Label(localizationManager.text("common.delete"), systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -500,10 +496,17 @@ This does not start a timer or schedule time—tasks work fine without #.
     }
     
     private func formattedDueDate(_ item: TodoItem, dueDate: Date) -> String {
+        Self.dateFormatter.locale = localizationManager.effectiveLocale
+        Self.dateTimeFormatter.locale = localizationManager.effectiveLocale
         if item.hasDueTime {
             return Self.dateTimeFormatter.string(from: dueDate)
         }
         return Self.dateFormatter.string(from: dueDate)
+    }
+
+    private func formatLastSyncDate(_ date: Date) -> String {
+        Self.lastSyncFormatter.locale = localizationManager.effectiveLocale
+        return Self.lastSyncFormatter.string(from: date)
     }
     
     /// Strips the time portion unless the user explicitly opted in.
@@ -571,14 +574,20 @@ This does not start a timer or schedule time—tasks work fine without #.
 
     private func planningStatusLabel(for item: TodoItem) -> String {
         guard let start = planningItem(for: item)?.startDate else {
-            return "Unplanned"
+            return localizationManager.text("tasks.unplanned")
         }
+        Self.dateFormatter.locale = localizationManager.effectiveLocale
+        Self.dateTimeFormatter.locale = localizationManager.effectiveLocale
         let calendar = Calendar.current
         if calendar.isDateInToday(start) {
-            return item.hasDueTime ? "Today \(Self.dateTimeFormatter.string(from: start))" : "Planned today"
+            return item.hasDueTime
+                ? localizationManager.format("tasks.plan_status.today_time_format", Self.dateTimeFormatter.string(from: start))
+                : localizationManager.text("tasks.plan_status.planned_today")
         }
         if calendar.isDateInTomorrow(start) {
-            return item.hasDueTime ? "Tomorrow \(Self.dateTimeFormatter.string(from: start))" : "Planned tomorrow"
+            return item.hasDueTime
+                ? localizationManager.format("tasks.plan_status.tomorrow_time_format", Self.dateTimeFormatter.string(from: start))
+                : localizationManager.text("tasks.plan_status.planned_tomorrow")
         }
         return item.hasDueTime
             ? Self.dateTimeFormatter.string(from: start)
@@ -615,15 +624,15 @@ This does not start a timer or schedule time—tasks work fine without #.
     
     private var taskEditorSheet: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(editingItem == nil ? "Add Task" : "Edit Task")
+            Text(editingItem == nil ? localizationManager.text("tasks.editor.add_title") : localizationManager.text("tasks.editor.edit_title"))
                 .font(.title2)
                 .fontWeight(.semibold)
             
             VStack(alignment: .leading, spacing: 10) {
-                TextField("Title", text: $titleField)
+                TextField(localizationManager.text("tasks.editor.title_placeholder"), text: $titleField)
                     .textFieldStyle(.roundedBorder)
                 
-                Toggle("Set due date", isOn: $dueDateEnabled)
+                Toggle(localizationManager.text("tasks.editor.set_due_date"), isOn: $dueDateEnabled)
                     .onChange(of: dueDateEnabled) { _, isOn in
                         // Default to date-only when enabling; user opts into time explicitly.
                         if !isOn { includeDueTime = false }
@@ -631,53 +640,53 @@ This does not start a timer or schedule time—tasks work fine without #.
                 
                 if dueDateEnabled {
                     DatePicker(
-                        "Due date",
+                        localizationManager.text("tasks.editor.due_date"),
                         selection: $dueDateField,
                         displayedComponents: [.date]
                     )
-                    Toggle("Include time", isOn: $includeDueTime)
+                    Toggle(localizationManager.text("tasks.editor.include_time"), isOn: $includeDueTime)
                         .toggleStyle(.switch)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     
                     if includeDueTime {
                         DatePicker(
-                            "Time",
+                            localizationManager.text("tasks.editor.time"),
                             selection: $dueDateField,
                             displayedComponents: [.hourAndMinute]
                         )
                         .datePickerStyle(.field)
                     } else {
-                        Text("Default: saves the date only until you turn time on.")
+                        Text(localizationManager.text("tasks.editor.date_only_hint"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 
-                Text("Notes (optional)")
+                Text(localizationManager.text("tasks.editor.notes_optional"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("Notes", text: $notesField, axis: .vertical)
+                TextField(localizationManager.text("tasks.editor.notes_placeholder"), text: $notesField, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                 
-                Text("Tags (comma separated, optional)")
+                Text(localizationManager.text("tasks.editor.tags_optional"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("e.g. work, focus", text: $tagsField)
+                TextField(localizationManager.text("tasks.editor.tags_placeholder"), text: $tagsField)
                     .textFieldStyle(.roundedBorder)
                 
-                Toggle("Sync this task to Calendar", isOn: $syncToCalendarField)
+                Toggle(localizationManager.text("tasks.editor.sync_to_calendar"), isOn: $syncToCalendarField)
                     .toggleStyle(.switch)
                     .font(.subheadline)
                     .foregroundStyle(.primary)
                     .padding(.top, 6)
-                    .help("Writes this task to Calendar when enabled. Does not auto-schedule or delete events.")
+                    .help(localizationManager.text("tasks.editor.sync_to_calendar_help"))
             }
             
             Spacer(minLength: 0)
             
             HStack {
-                Button("Cancel") {
+                Button(localizationManager.text("common.cancel")) {
                     resetEditor()
                     showingEditor = false
                 }
@@ -685,7 +694,7 @@ This does not start a timer or schedule time—tasks work fine without #.
                 
                 Spacer()
                 
-                Button(editingItem == nil ? "Add" : "Save") {
+                Button(editingItem == nil ? localizationManager.text("common.add") : localizationManager.text("common.save")) {
                     saveTask()
                 }
                 .buttonStyle(.borderedProminent)
@@ -819,14 +828,14 @@ extension TodoListView {
     @ViewBuilder
     fileprivate var batchActionsBar: some View {
         HStack(spacing: 12) {
-            Text("\(selectedTaskIDs.count) selected")
+            Text(localizationManager.format("common.selected_count", selectedTaskIDs.count))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
             Divider()
             
             DatePicker(
-                "Move to",
+                localizationManager.text("common.move_to"),
                 selection: $batchDueDate,
                 displayedComponents: [.date]
             )
@@ -836,14 +845,14 @@ extension TodoListView {
             Button {
                 applyBatchMove(to: batchDueDate)
             } label: {
-                Label("Move", systemImage: "arrow.right.circle")
+                Label(localizationManager.text("common.move"), systemImage: "arrow.right.circle")
             }
             .buttonStyle(.bordered)
             
             Button {
                 applyBatchClearDate()
             } label: {
-                Label("Clear date", systemImage: "calendar.badge.minus")
+                Label(localizationManager.text("tasks.action.clear_date"), systemImage: "calendar.badge.minus")
             }
             .buttonStyle(.bordered)
             
@@ -852,18 +861,18 @@ extension TodoListView {
             Button(role: .destructive) {
                 showBatchDeleteConfirmation = true
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label(localizationManager.text("common.delete"), systemImage: "trash")
             }
             .buttonStyle(.borderedProminent)
             .tint(.red)
         }
-        .alert("Delete \(selectedTaskIDs.count) items?", isPresented: $showBatchDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
+        .alert(localizationManager.format("tasks.batch.delete_confirmation_title", selectedTaskIDs.count), isPresented: $showBatchDeleteConfirmation) {
+            Button(localizationManager.text("common.delete"), role: .destructive) {
                 applyBatchDelete()
             }
-            Button("Cancel", role: .cancel) { }
+            Button(localizationManager.text("common.cancel"), role: .cancel) { }
         } message: {
-            Text("This will remove all selected tasks. This action cannot be undone.")
+            Text(localizationManager.text("tasks.batch.delete_confirmation_body"))
         }
     }
     

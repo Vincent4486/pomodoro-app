@@ -5,21 +5,22 @@ import EventKit
 /// Shows status and enable buttons for Notifications, Calendar, and Reminders.
 struct SettingsPermissionsView: View {
     @ObservedObject var permissionsManager: PermissionsManager
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Permissions")
+            Text(localizationManager.text("permissions.title"))
                 .font(.title2)
                 .fontWeight(.semibold)
             
-            Text("Grant permissions to enable full app functionality.")
+            Text(localizationManager.text("permissions.subtitle"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
             VStack(spacing: 16) {
                 permissionRow(
                     icon: "bell.fill",
-                    title: "Notifications",
+                    title: localizationManager.text("permissions.notifications"),
                     status: permissionsManager.notificationStatusText,
                     isAuthorized: permissionsManager.isNotificationsAuthorized,
                     action: {
@@ -33,7 +34,7 @@ struct SettingsPermissionsView: View {
                 
                 permissionRow(
                     icon: "calendar",
-                    title: "Calendar",
+                    title: localizationManager.text("permissions.calendar"),
                     status: permissionsManager.calendarStatusText,
                     isAuthorized: permissionsManager.isCalendarAuthorized,
                     isDenied: permissionsManager.calendarStatus == .denied || permissionsManager.calendarStatus == .restricted,
@@ -48,7 +49,7 @@ struct SettingsPermissionsView: View {
                 
                 permissionRow(
                     icon: "checklist",
-                    title: "Reminders",
+                    title: localizationManager.text("permissions.reminders"),
                     status: permissionsManager.remindersStatusText,
                     isAuthorized: permissionsManager.isRemindersAuthorized,
                     isDenied: permissionsManager.remindersStatus == .denied || permissionsManager.remindersStatus == .restricted,
@@ -63,7 +64,7 @@ struct SettingsPermissionsView: View {
             .background(Color.primary.opacity(0.05))
             .cornerRadius(12)
             
-            Text("Note: Tasks work without Reminders access. Reminders sync is optional.")
+            Text(localizationManager.text("permissions.note.reminders_optional"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -72,21 +73,21 @@ struct SettingsPermissionsView: View {
         .onAppear {
             permissionsManager.refreshAllStatuses()
         }
-        .alert("Calendar Access Denied", isPresented: $permissionsManager.showCalendarDeniedAlert) {
-            Button("Open Settings") {
+        .alert(localizationManager.text("permissions.calendar.denied_title"), isPresented: $permissionsManager.showCalendarDeniedAlert) {
+            Button(localizationManager.text("common.open_settings")) {
                 permissionsManager.openSystemSettings()
             }
-            Button("Cancel", role: .cancel) { }
+            Button(localizationManager.text("common.cancel"), role: .cancel) { }
         } message: {
-            Text("Calendar access is required to view your events and schedules. You can enable it in System Settings → Privacy & Security → Calendar.")
+            Text(localizationManager.text("permissions.calendar.denied_message"))
         }
-        .alert("Reminders Access Denied", isPresented: $permissionsManager.showRemindersDeniedAlert) {
-            Button("Open Settings") {
+        .alert(localizationManager.text("permissions.reminders.denied_title"), isPresented: $permissionsManager.showRemindersDeniedAlert) {
+            Button(localizationManager.text("common.open_settings")) {
                 permissionsManager.openSystemSettings()
             }
-            Button("Cancel", role: .cancel) { }
+            Button(localizationManager.text("common.cancel"), role: .cancel) { }
         } message: {
-            Text("Reminders access is optional but allows you to sync tasks with Apple Reminders. You can enable it in System Settings → Privacy & Security → Reminders.")
+            Text(localizationManager.text("permissions.reminders.denied_message"))
         }
 
         Divider()
@@ -122,7 +123,7 @@ struct SettingsPermissionsView: View {
             Spacer()
             
             if isAuthorized {
-                Text("Authorized")
+                Text(localizationManager.text("permissions.authorized"))
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundStyle(.green)
@@ -132,14 +133,14 @@ struct SettingsPermissionsView: View {
                     .cornerRadius(6)
             } else if isDenied {
                 Button(action: action) {
-                    Text("Request Again")
+                    Text(localizationManager.text("permissions.request_again"))
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }
                 .buttonStyle(.bordered)
             } else {
                 Button(action: action) {
-                    Text("Enable")
+                    Text(localizationManager.text("permissions.enable"))
                         .font(.subheadline)
                         .fontWeight(.medium)
                 }

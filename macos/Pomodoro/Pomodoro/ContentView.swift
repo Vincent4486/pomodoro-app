@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Foundation
 
 struct ContentView: View {
     @EnvironmentObject private var onboardingState: OnboardingState

@@ -6,20 +6,16 @@ import EventKit
 struct CalendarMonthView: View {
     let date: Date
     let events: [EKEvent]
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     private let monthColumns: [GridItem] = Array(repeating: GridItem(.flexible(minimum: 70), spacing: 8), count: 7)
-    
-    private static let weekdaySymbols: [String] = {
-        let calendar = Calendar.current
-        return calendar.shortStandaloneWeekdaySymbols
-    }()
     
     var body: some View {
         let gridDays = monthGridDays(from: date)
         
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                ForEach(Self.weekdaySymbols, id: \.self) { symbol in
+                ForEach(weekdaySymbols, id: \.self) { symbol in
                     Text(symbol)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -37,7 +33,8 @@ struct CalendarMonthView: View {
     }
     
     private func monthGridDays(from date: Date) -> [Date?] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.locale = localizationManager.effectiveLocale
         guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)),
               let range = calendar.range(of: .day, in: .month, for: date) else {
             return []
@@ -80,7 +77,7 @@ struct CalendarMonthView: View {
                         .foregroundStyle(isToday ? .blue : .primary)
                     Spacer()
                     if isToday {
-                        Text("Today")
+                        Text(localizationManager.text("calendar.today"))
                             .font(.caption2)
                             .foregroundStyle(.blue)
                     }
@@ -88,7 +85,7 @@ struct CalendarMonthView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(dayEvents.prefix(3), id: \.eventIdentifier) { event in
-                        Text(event.title ?? "Untitled")
+                        Text(event.title ?? localizationManager.text("common.untitled"))
                             .font(.caption)
                             .lineLimit(1)
                     }
@@ -104,5 +101,21 @@ struct CalendarMonthView: View {
                 .fill(Color.clear)
                 .frame(minHeight: 72)
         }
+    }
+
+    private static let weekdaySymbolsFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        return formatter
+    }()
+
+    private static var weekdaySymbols: [String] {
+        let formatter = weekdaySymbolsFormatter
+        return formatter.shortStandaloneWeekdaySymbols
+    }
+
+    private var weekdaySymbols: [String] {
+        Self.weekdaySymbolsFormatter.locale = localizationManager.effectiveLocale
+        return Self.weekdaySymbols
     }
 }

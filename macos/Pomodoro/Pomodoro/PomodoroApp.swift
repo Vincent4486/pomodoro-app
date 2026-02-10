@@ -17,6 +17,7 @@ struct PomodoroApp: App {
     @StateObject private var audioSourceStore: AudioSourceStore
     @StateObject private var onboardingState: OnboardingState
     @StateObject private var authViewModel: AuthViewModel
+    @StateObject private var languageManager: LanguageManager
 
     init() {
         if FirebaseApp.app() == nil {
@@ -38,46 +39,56 @@ struct PomodoroApp: App {
         )
         _onboardingState = StateObject(wrappedValue: OnboardingState())
         _authViewModel = StateObject(wrappedValue: AuthViewModel.shared)
+        _languageManager = StateObject(wrappedValue: LanguageManager.shared)
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(appState)
-                .environmentObject(musicController)
-                .environmentObject(audioSourceStore)
-                .environmentObject(onboardingState)
-                .environmentObject(authViewModel)
-                .task(id: ObjectIdentifier(appState)) {
-                    appDelegate.appState = appState
-                    appDelegate.musicController = musicController
-                    appDelegate.audioSourceStore = audioSourceStore
-                    appDelegate.onboardingState = onboardingState
-                    appDelegate.authViewModel = authViewModel
-                }
+            rootContentView
         }
         .commands {
-            CommandMenu("Timer") {
-                Button("Start/Pause Pomodoro") {
+            CommandMenu(languageManager.text("menu.timer")) {
+                Button(languageManager.text("menu.start_pause_pomodoro")) {
                     // Spacebar should be inert while in Flow Mode to keep the focus surface passive.
                     guard !appState.isInFlowMode else { return }
                     appState.startOrPausePomodoro()
                 }
                 .keyboardShortcut(.space, modifiers: [])
 
-                Button("Reset Pomodoro") {
+                Button(languageManager.text("menu.reset_pomodoro")) {
                     appState.resetPomodoro()
                 }
                 .keyboardShortcut("r", modifiers: [])
 
                 Divider()
 
-                Button("Start Countdown") {
+                Button(languageManager.text("menu.start_countdown")) {
                     appState.startCountdown()
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(appState.countdown.state != .idle)
             }
         }
+    }
+
+    @ViewBuilder
+    private var rootContentView: some View {
+        let content = ContentView()
+            .environmentObject(appState)
+            .environmentObject(musicController)
+            .environmentObject(audioSourceStore)
+            .environmentObject(onboardingState)
+            .environmentObject(authViewModel)
+            .environmentObject(languageManager)
+            .id(languageManager.currentLanguage.rawValue)
+            .task(id: ObjectIdentifier(appState)) {
+                appDelegate.appState = appState
+                appDelegate.musicController = musicController
+                appDelegate.audioSourceStore = audioSourceStore
+                appDelegate.onboardingState = onboardingState
+                appDelegate.authViewModel = authViewModel
+            }
+
+        content.environment(\.locale, languageManager.effectiveLocale)
     }
 }

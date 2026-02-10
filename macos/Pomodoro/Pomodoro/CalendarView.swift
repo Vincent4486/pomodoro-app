@@ -8,6 +8,7 @@ struct CalendarView: View {
     @ObservedObject var calendarManager: CalendarManager
     @ObservedObject var permissionsManager: PermissionsManager
     @ObservedObject var todoStore: TodoStore
+    @EnvironmentObject private var localizationManager: LocalizationManager
     
     @State private var selectedView: ViewType = .day
     @State private var anchorDate: Date = Date()
@@ -45,9 +46,9 @@ struct CalendarView: View {
         
         var title: String {
             switch self {
-            case .day: return "Day"
-            case .week: return "Week"
-            case .month: return "Month"
+            case .day: return LocalizationManager.shared.text("calendar.view.day")
+            case .week: return LocalizationManager.shared.text("calendar.view.week")
+            case .month: return LocalizationManager.shared.text("calendar.view.month")
             }
         }
     }
@@ -91,19 +92,19 @@ struct CalendarView: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Calendar")
+                    Text(localizationManager.text("calendar.title"))
                         .font(.largeTitle)
                         .fontWeight(.semibold)
-                    Text("Your time-based events and schedules")
+                    Text(localizationManager.text("calendar.subtitle"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack(spacing: 12) {
-                    Picker("View", selection: $selectedView) {
-                        Text("Day").tag(ViewType.day)
-                        Text("Week").tag(ViewType.week)
-                        Text("Month").tag(ViewType.month)
+                    Picker(localizationManager.text("calendar.view"), selection: $selectedView) {
+                        Text(localizationManager.text("calendar.view.day")).tag(ViewType.day)
+                        Text(localizationManager.text("calendar.view.week")).tag(ViewType.week)
+                        Text(localizationManager.text("calendar.view.month")).tag(ViewType.month)
                     }
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 260)
@@ -128,14 +129,14 @@ struct CalendarView: View {
                         prepareNewEventDefaults()
                         showingAddEvent = true
                     } label: {
-                        Label("Add Event", systemImage: "plus")
+                        Label(localizationManager.text("calendar.add_event"), systemImage: "plus")
                     }
                     .buttonStyle(.borderedProminent)
                     
                     Button {
                         Task { await loadEvents() }
                     } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                        Label(localizationManager.text("common.refresh"), systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -167,17 +168,17 @@ struct CalendarView: View {
                 .foregroundStyle(.secondary)
             
             VStack(spacing: 12) {
-                Text("Calendar Unavailable")
+                Text(localizationManager.text("calendar.unavailable.title"))
                     .font(.title)
                     .fontWeight(.semibold)
                 
-                Text("Calendar access is required to view your events and schedules.")
+                Text(localizationManager.text("calendar.unavailable.body"))
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 
-                Text("Click the button below to request access.")
+                Text(localizationManager.text("calendar.unavailable.cta"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -190,7 +191,7 @@ struct CalendarView: View {
                     await permissionsManager.requestCalendarPermission()
                 }
             }) {
-                Label("Request Calendar Access", systemImage: "calendar")
+                Label(localizationManager.text("calendar.request_access"), systemImage: "calendar")
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)
@@ -198,20 +199,20 @@ struct CalendarView: View {
         }
         .padding(48)
         .frame(maxWidth: 520, minHeight: 420, alignment: .center)
-        .alert("Calendar Access Denied", isPresented: $permissionsManager.showCalendarDeniedAlert) {
-            Button("Open Settings") {
+        .alert(localizationManager.text("calendar.access_denied.title"), isPresented: $permissionsManager.showCalendarDeniedAlert) {
+            Button(localizationManager.text("common.open_settings")) {
                 permissionsManager.openSystemSettings()
             }
-            Button("Cancel", role: .cancel) { }
+            Button(localizationManager.text("common.cancel"), role: .cancel) { }
         } message: {
-            Text("Calendar access is required to view your events. You can enable it in System Settings → Privacy & Security → Calendar.")
+            Text(localizationManager.text("calendar.access_denied.body"))
         }
     }
     
     @ViewBuilder
     private func eventsContent(maxWidth: CGFloat) -> some View {
         if calendarManager.isLoading {
-            ProgressView("Loading events...")
+            ProgressView(localizationManager.text("calendar.loading"))
                 .padding(32)
                 .frame(maxWidth: maxWidth, alignment: .leading)
         } else {
@@ -252,7 +253,8 @@ struct CalendarView: View {
     
     private func daysInWeek(from date: Date) -> [Date] {
         var days: [Date] = []
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.locale = localizationManager.effectiveLocale
         let startOfDay = calendar.startOfDay(for: date)
         let weekday = calendar.component(.weekday, from: startOfDay)
         guard let startOfWeek = calendar.date(byAdding: .day, value: -(weekday - 1), to: startOfDay) else {
@@ -279,8 +281,9 @@ struct CalendarView: View {
 
     private func formatEventTime(_ event: EKEvent) -> String {
         if event.isAllDay {
-            return "All day"
+            return localizationManager.text("calendar.all_day")
         }
+        Self.eventTimeFormatter.locale = localizationManager.effectiveLocale
         let start = Self.eventTimeFormatter.string(from: event.startDate)
         let end = Self.eventTimeFormatter.string(from: event.endDate)
         return "\(start) - \(end)"
@@ -296,12 +299,12 @@ struct CalendarView: View {
         }
 
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Today Summary")
+            Text(localizationManager.text("calendar.today_summary"))
                 .font(.headline)
             HStack(spacing: 12) {
-                summaryPill(title: "Blocks", value: "\(todayEvents.count)")
-                summaryPill(title: "Tasks", value: "\(todayTasks.count)")
-                summaryPill(title: "Planned mins", value: "\(totalMinutes)")
+                summaryPill(title: localizationManager.text("calendar.blocks"), value: "\(todayEvents.count)")
+                summaryPill(title: localizationManager.text("calendar.tasks"), value: "\(todayTasks.count)")
+                summaryPill(title: localizationManager.text("calendar.planned_mins"), value: "\(totalMinutes)")
             }
         }
     }
@@ -316,7 +319,7 @@ struct CalendarView: View {
                     Image(systemName: "calendar.badge.clock")
                         .font(.system(size: 32))
                         .foregroundStyle(.secondary)
-                    Text("No blocks today")
+                    Text(localizationManager.text("calendar.no_blocks_today"))
                         .font(.headline)
                         .foregroundStyle(.secondary)
                 }
@@ -325,7 +328,7 @@ struct CalendarView: View {
             } else {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if !todayEvents.isEmpty {
-                        Text("Time Blocks")
+                        Text(localizationManager.text("calendar.time_blocks"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         ForEach(todayEvents, id: \.eventIdentifier) { event in
@@ -334,7 +337,7 @@ struct CalendarView: View {
                     }
 
                     if !todayTasks.isEmpty {
-                        Text("Tasks")
+                        Text(localizationManager.text("calendar.tasks"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         ForEach(todayTasks) { task in
@@ -353,7 +356,7 @@ struct CalendarView: View {
     private func blockCard(_ event: EKEvent, events: [EKEvent]) -> some View {
         let isSelected = event.eventIdentifier.map { selectedEventIDs.contains($0) } ?? false
         return VStack(alignment: .leading, spacing: 6) {
-            Text(event.title ?? "Untitled")
+            Text(event.title ?? localizationManager.text("common.untitled"))
                 .font(.headline)
             Text(formatEventTime(event))
                 .font(.subheadline)
@@ -385,9 +388,7 @@ struct CalendarView: View {
                     .foregroundStyle(.secondary)
             }
             if let due = item.dueDate {
-                let day = Self.shortDayFormatter.string(from: due)
-                let suffix = item.hasDueTime ? " • \(Self.eventTimeFormatter.string(from: due))" : ""
-                Text(day + suffix)
+                Text(formattedTaskDue(item: item, due: due))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -441,12 +442,12 @@ struct CalendarView: View {
         
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                Text("\(selectedEventIDs.count) selected")
+                Text(localizationManager.format("common.selected_count", selectedEventIDs.count))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 
                 if hasReadOnly {
-                    Text("Some events are read-only (holidays/subscribed). Actions apply only to editable ones.")
+                    Text(localizationManager.text("calendar.read_only_warning"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -454,7 +455,7 @@ struct CalendarView: View {
                 Spacer()
                 
                 DatePicker(
-                    "Move to",
+                    localizationManager.text("common.move_to"),
                     selection: $batchEventDate,
                     displayedComponents: [.date]
                 )
@@ -464,7 +465,7 @@ struct CalendarView: View {
                 Button {
                     Task { await applyEventMove(to: batchEventDate, editable: editableSelection) }
                 } label: {
-                    Label("Move", systemImage: "arrow.right.circle")
+                    Label(localizationManager.text("common.move"), systemImage: "arrow.right.circle")
                 }
                 .buttonStyle(.bordered)
                 .disabled(editableSelection.isEmpty)
@@ -472,7 +473,7 @@ struct CalendarView: View {
                 Button(role: .destructive) {
                     showDeleteEventsConfirmation = true
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label(localizationManager.text("common.delete"), systemImage: "trash")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
@@ -485,13 +486,13 @@ struct CalendarView: View {
                     .foregroundStyle(.orange)
             }
         }
-        .alert("Delete \(editableSelection.count) events?", isPresented: $showDeleteEventsConfirmation) {
-            Button("Delete", role: .destructive) {
+        .alert(localizationManager.format("calendar.delete_events.confirmation", editableSelection.count), isPresented: $showDeleteEventsConfirmation) {
+            Button(localizationManager.text("common.delete"), role: .destructive) {
                 Task { await applyEventDelete(editable: editableSelection) }
             }
-            Button("Cancel", role: .cancel) { }
+            Button(localizationManager.text("common.cancel"), role: .cancel) { }
         } message: {
-            Text("Read-only events (holidays/subscribed) will not be deleted.")
+            Text(localizationManager.text("calendar.delete_events.read_only_note"))
         }
     }
     
@@ -504,7 +505,7 @@ struct CalendarView: View {
             lastSelectedEventID = nil
             await loadEvents()
         } catch {
-            batchEventWarning = "Could not move all events: \(error.localizedDescription)"
+            batchEventWarning = localizationManager.format("calendar.error.move_all_failed", error.localizedDescription)
             print("[CalendarView] move events failed: \(error)")
         }
     }
@@ -518,7 +519,7 @@ struct CalendarView: View {
             lastSelectedEventID = nil
             await loadEvents()
         } catch {
-            batchEventWarning = "Could not delete all events: \(error.localizedDescription)"
+            batchEventWarning = localizationManager.format("calendar.error.delete_all_failed", error.localizedDescription)
             print("[CalendarView] delete events failed: \(error)")
         }
     }
@@ -555,6 +556,14 @@ struct CalendarView: View {
             return false
         }
     }
+
+    private func formattedTaskDue(item: TodoItem, due: Date) -> String {
+        Self.shortDayFormatter.locale = localizationManager.effectiveLocale
+        Self.eventTimeFormatter.locale = localizationManager.effectiveLocale
+        let day = Self.shortDayFormatter.string(from: due)
+        let suffix = item.hasDueTime ? " • \(Self.eventTimeFormatter.string(from: due))" : ""
+        return day + suffix
+    }
     
     private func prepareNewEventDefaults() {
         newEventTitle = ""
@@ -579,7 +588,7 @@ struct CalendarView: View {
         let endDate = newEventStart.addingTimeInterval(Double(newEventDurationMinutes * 60))
         do {
             try await calendarManager.createEvent(
-                title: newEventTitle.isEmpty ? "New Event" : newEventTitle,
+                title: newEventTitle.isEmpty ? localizationManager.text("calendar.new_event_default_title") : newEventTitle,
                 startDate: newEventStart,
                 endDate: endDate,
                 notes: newEventNotes.isEmpty ? nil : newEventNotes
@@ -594,6 +603,7 @@ struct CalendarView: View {
 }
 
 private struct AddEventSheet: View {
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Binding var title: String
     @Binding var startDate: Date
     @Binding var durationMinutes: Int
@@ -605,23 +615,23 @@ private struct AddEventSheet: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            Text("Add Event")
+            Text(localizationManager.text("calendar.add_event"))
                 .font(.title3)
                 .fontWeight(.semibold)
             
             VStack(alignment: .leading, spacing: 8) {
-                TextField("Title", text: $title)
+                TextField(localizationManager.text("common.title"), text: $title)
                     .textFieldStyle(.roundedBorder)
                 
-                DatePicker("Start", selection: $startDate)
+                DatePicker(localizationManager.text("common.start"), selection: $startDate)
                 
                 HStack {
-                    Text("Duration")
+                    Text(localizationManager.text("common.duration"))
                     Spacer()
-                    Stepper("\(durationMinutes) min", value: $durationMinutes, in: 15...480, step: 15)
+                    Stepper(localizationManager.format("common.duration_minutes_format", durationMinutes), value: $durationMinutes, in: 15...480, step: 15)
                 }
                 
-                TextField("Notes (optional)", text: $notes, axis: .vertical)
+                TextField(localizationManager.text("common.notes_optional"), text: $notes, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
             }
             
@@ -633,12 +643,12 @@ private struct AddEventSheet: View {
             }
             
             HStack {
-                Button("Cancel", action: onCancel)
+                Button(localizationManager.text("common.cancel"), action: onCancel)
                     .buttonStyle(.bordered)
                 
                 Spacer()
                 
-                Button("Save") {
+                Button(localizationManager.text("common.save")) {
                     onSave()
                 }
                 .buttonStyle(.borderedProminent)

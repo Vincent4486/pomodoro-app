@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MediaControlBar: View {
     @EnvironmentObject private var audioSourceStore: AudioSourceStore
+    @EnvironmentObject private var localizationManager: LocalizationManager
 
     var body: some View {
         HStack(spacing: 12) {
@@ -16,7 +17,7 @@ struct MediaControlBar: View {
                 artworkView(for: media)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Now Playing · \(media.source.displayName)")
+                    Text(localizationManager.format("audio.now_playing_source", media.source.displayName))
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -44,12 +45,12 @@ struct MediaControlBar: View {
                 .frame(width: 32, height: 32)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("No external music playing")
+                    Text(localizationManager.text("audio.none_playing"))
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text("Start Apple Music or Spotify to switch automatically")
+                    Text(localizationManager.text("audio.start_external_hint"))
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

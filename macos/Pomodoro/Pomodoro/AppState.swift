@@ -421,17 +421,18 @@ final class AppState: ObservableObject {
     }
 
     var calendarReminderPermissionStatusText: String {
+        let l10n = LocalizationManager.shared
         let cal = EKEventStore.authorizationStatus(for: .event)
         let rem = EKEventStore.authorizationStatus(for: .reminder)
         switch (cal, rem) {
         case (.authorized, .authorized):
-            return "Calendar and Reminders enabled."
+            return l10n.text("permissions.status.calendar_and_reminders_enabled")
         case (.authorized, _):
-            return "Calendar enabled. Reminders optional."
+            return l10n.text("permissions.status.calendar_enabled_reminders_optional")
         case (_, .authorized):
-            return "Reminders enabled. Calendar optional."
+            return l10n.text("permissions.status.reminders_enabled_calendar_optional")
         default:
-            return "Access not granted. You can enable it later."
+            return l10n.text("permissions.status.access_not_granted")
         }
     }
 
@@ -524,46 +525,62 @@ final class AppState: ObservableObject {
     }
 
     private func sendPomodoroReminderIfNeeded(remainingSeconds: Int) {
+        let l10n = LocalizationManager.shared
         let reminderLeadTime = reminderPreference.leadTimeSeconds
         guard reminderLeadTime > 0, !pomodoroReminderSent else { return }
         guard remainingSeconds == reminderLeadTime else { return }
         guard pomodoro.state == .running || pomodoro.state == .breakRunning else { return }
 
-        let title = pomodoro.currentMode == .work ? "Pomodoro ending soon" : "Break ending soon"
-        let body = "1 minute remaining."
+        let title = pomodoro.currentMode == .work
+            ? l10n.text("notification.pomodoro_ending_soon")
+            : l10n.text("notification.break_ending_soon")
+        let body = l10n.text("notification.one_minute_remaining")
         sendNotification(title: title, body: body)
         pomodoroReminderSent = true
     }
 
     private func sendCountdownReminderIfNeeded(remainingSeconds: Int) {
+        let l10n = LocalizationManager.shared
         let reminderLeadTime = reminderPreference.leadTimeSeconds
         guard reminderLeadTime > 0, !countdownReminderSent else { return }
         guard remainingSeconds == reminderLeadTime else { return }
         guard countdown.state == .running else { return }
 
-        sendNotification(title: "Countdown ending soon", body: "1 minute remaining.")
+        sendNotification(
+            title: l10n.text("notification.countdown_ending_soon"),
+            body: l10n.text("notification.one_minute_remaining")
+        )
         countdownReminderSent = true
     }
 
     private func sendPomodoroCompletionNotification() {
-        sendNotification(title: decoratedTitle("Focus complete", emoji: "🍅"), body: "Time for a break.")
+        let l10n = LocalizationManager.shared
+        sendNotification(
+            title: decoratedTitle(l10n.text("notification.focus_complete"), emoji: "🍅"),
+            body: l10n.text("notification.time_for_break")
+        )
     }
 
     private func sendBreakCompletionNotification() {
+        let l10n = LocalizationManager.shared
         let title: String
         switch lastBreakMode {
         case .longBreak:
-            title = decoratedTitle("Long break complete", emoji: "☕️")
+            title = decoratedTitle(l10n.text("notification.long_break_complete"), emoji: "☕️")
         case .break:
-            title = decoratedTitle("Break complete", emoji: "☕️")
+            title = decoratedTitle(l10n.text("notification.break_complete"), emoji: "☕️")
         case .work, .idle, nil:
-            title = decoratedTitle("Break complete", emoji: "☕️")
+            title = decoratedTitle(l10n.text("notification.break_complete"), emoji: "☕️")
         }
-        sendNotification(title: title, body: "Ready to focus again?")
+        sendNotification(title: title, body: l10n.text("notification.ready_to_focus_again"))
     }
 
     private func sendCountdownCompletionNotification() {
-        sendNotification(title: decoratedTitle("Countdown complete", emoji: "⏳"), body: "Time is up.")
+        let l10n = LocalizationManager.shared
+        sendNotification(
+            title: decoratedTitle(l10n.text("notification.countdown_complete"), emoji: "⏳"),
+            body: l10n.text("notification.time_is_up")
+        )
     }
 
     private func decoratedTitle(_ title: String, emoji: String?) -> String {
@@ -572,13 +589,14 @@ final class AppState: ObservableObject {
     }
 
     private func transitionMessageForBreakStart() -> String {
+        let l10n = LocalizationManager.shared
         switch pomodoro.currentMode {
         case .longBreak:
-            return "Long break starting"
+            return l10n.text("transition.long_break_starting")
         case .break:
-            return "Break starting"
+            return l10n.text("transition.break_starting")
         case .work, .idle:
-            return "Break starting"
+            return l10n.text("transition.break_starting")
         }
     }
 

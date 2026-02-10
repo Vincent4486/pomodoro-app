@@ -17,11 +17,11 @@ enum NotificationPreference: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .off:
-            return "Off"
+            return LocalizationManager.shared.text("notification.off")
         case .silent:
-            return "Silent banner"
+            return LocalizationManager.shared.text("notification.silent_banner")
         case .sound:
-            return "Banner + sound"
+            return LocalizationManager.shared.text("notification.banner_sound")
         }
     }
 }
@@ -35,18 +35,18 @@ enum NotificationDeliveryStyle: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .system:
-            return "System Notifications"
+            return LocalizationManager.shared.text("notification.delivery.system")
         case .inApp:
-            return "In-App Popup"
+            return LocalizationManager.shared.text("notification.delivery.in_app")
         }
     }
 
     var detail: String {
         switch self {
         case .system:
-            return "Use macOS banners or alerts."
+            return LocalizationManager.shared.text("notification.delivery.system.detail")
         case .inApp:
-            return "Show a confirmation popup inside the app window."
+            return LocalizationManager.shared.text("notification.delivery.in_app.detail")
         }
     }
 }
@@ -60,9 +60,9 @@ enum ReminderPreference: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .off:
-            return "Off"
+            return LocalizationManager.shared.text("notification.off")
         case .oneMinute:
-            return "1 minute before"
+            return LocalizationManager.shared.text("notification.reminder.one_minute")
         }
     }
 

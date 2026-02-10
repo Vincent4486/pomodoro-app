@@ -41,6 +41,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private unowned let appState: AppState
     private let musicController: MusicController
+    private let localizationManager = LocalizationManager.shared
     private let statusItem: NSStatusItem
     private let menu: NSMenu
     private let openMainWindow: () -> Void
@@ -119,6 +120,24 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 self?.rebuildMenu()
             }
             .store(in: &cancellables)
+
+        localizationManager.$currentLanguage
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.rebuildMenu()
+                self?.updateStatusItemLength()
+                self?.updateTitleIfNeeded()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.rebuildMenu()
+                self?.updateStatusItemLength()
+                self?.updateTitleIfNeeded()
+            }
+            .store(in: &cancellables)
     }
 
     private func startTitleTimer() {
@@ -157,7 +176,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             "☕ 00:00",
             "🌙 00:00",
             "⏱ 00:00",
-            "🍅 Ready"
+            "🍅 \(localizationManager.text("menu.status.ready"))"
         ]
         let maxWidth = sampleTitles
             .map { title in
@@ -178,20 +197,20 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         case .countdown:
             return "⏱ \(formattedTime(appState.countdown.remainingSeconds))"
         case .idle:
-            return "🍅 Ready"
+            return "🍅 \(localizationManager.text("menu.status.ready"))"
         }
     }
 
     private func statusTooltip() -> String {
         switch currentMenuMode() {
         case .pomodoro:
-            return "Pomodoro running"
+            return localizationManager.text("menu.tooltip.pomodoro_running")
         case .breakTime:
             return breakTooltip()
         case .countdown:
-            return "Countdown running"
+            return localizationManager.text("menu.tooltip.countdown_running")
         case .idle:
-            return "Idle"
+            return localizationManager.text("menu.tooltip.idle")
         }
     }
 
@@ -221,21 +240,21 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         let pomodoroAvailability = pomodoroMenuActions(for: appState.pomodoro.state)
         menu.addItem(sectionHeader(title: pomodoroSectionTitle()))
-        menu.addItem(actionItem(title: "Start", action: #selector(startPomodoro), availability: pomodoroAvailability.start))
+        menu.addItem(actionItem(title: localizationManager.text("common.start"), action: #selector(startPomodoro), availability: pomodoroAvailability.start))
         menu.addItem(actionItem(
             title: pomodoroPauseTitle(),
             action: #selector(pausePomodoro),
             availability: pomodoroAvailability.pauseResume
         ))
-        menu.addItem(actionItem(title: "Reset", action: #selector(resetPomodoro), availability: pomodoroAvailability.reset))
+        menu.addItem(actionItem(title: localizationManager.text("common.reset"), action: #selector(resetPomodoro), availability: pomodoroAvailability.reset))
         menu.addItem(.separator())
         menu.addItem(actionItem(
-            title: "Start Break",
+            title: localizationManager.text("menu.start_break"),
             action: #selector(startBreak),
             availability: pomodoroAvailability.startBreak
         ))
         menu.addItem(actionItem(
-            title: "Skip Break",
+            title: localizationManager.text("menu.skip_break"),
             action: #selector(skipBreak),
             availability: pomodoroAvailability.skipBreak
         ))
@@ -244,7 +263,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let countdownAvailability = countdownMenuActions(for: appState.countdown.state)
         let countdownMenu = NSMenu()
         countdownMenu.addItem(actionItem(
-            title: "Start",
+            title: localizationManager.text("common.start"),
             action: #selector(startCountdown),
             availability: countdownAvailability.start
         ))
@@ -254,22 +273,22 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             availability: countdownAvailability.pauseResume
         ))
         countdownMenu.addItem(actionItem(
-            title: "Reset",
+            title: localizationManager.text("common.reset"),
             action: #selector(resetCountdown),
             availability: countdownAvailability.reset
         ))
-        let countdownItem = NSMenuItem(title: "Countdown", action: nil, keyEquivalent: "")
+        let countdownItem = NSMenuItem(title: localizationManager.text("timer.countdown"), action: nil, keyEquivalent: "")
         countdownItem.submenu = countdownMenu
         menu.addItem(countdownItem)
         menu.addItem(.separator())
-        menu.addItem(actionItem(title: "Flow", action: #selector(openFlow)))
-        menu.addItem(actionItem(title: "Tasks", action: #selector(openTasks)))
-        menu.addItem(actionItem(title: "Calendar", action: #selector(openCalendar)))
+        menu.addItem(actionItem(title: localizationManager.text("main.sidebar.flow"), action: #selector(openFlow)))
+        menu.addItem(actionItem(title: localizationManager.text("main.sidebar.tasks"), action: #selector(openTasks)))
+        menu.addItem(actionItem(title: localizationManager.text("main.sidebar.calendar"), action: #selector(openCalendar)))
         menu.addItem(.separator())
         menu.addItem(musicMenuItem())
         menu.addItem(.separator())
-        menu.addItem(actionItem(title: "Open App", action: #selector(openApp)))
-        menu.addItem(actionItem(title: "Quit", action: #selector(quitApp)))
+        menu.addItem(actionItem(title: localizationManager.text("menu.open_app"), action: #selector(openApp)))
+        menu.addItem(actionItem(title: localizationManager.text("menu.quit"), action: #selector(quitApp)))
 
         statusItem.menu = menu
     }
@@ -301,29 +320,33 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func pomodoroPauseTitle() -> String {
         switch appState.pomodoro.state {
         case .paused, .breakPaused:
-            return "▶ Resume"
+            return localizationManager.text("menu.resume_with_icon")
         case .running, .breakRunning, .idle:
-            return "⏸ Pause"
+            return localizationManager.text("menu.pause_with_icon")
         }
     }
 
     private func pomodoroSectionTitle() -> String {
         switch appState.pomodoro.state {
         case .running, .paused:
-            return "Pomodoro — Work"
+            return localizationManager.text("menu.section.pomodoro_work")
         case .breakRunning, .breakPaused:
-            return "Pomodoro — \(breakMenuTitle())"
+            return localizationManager.format("menu.section.pomodoro_break_format", breakMenuTitle())
         case .idle:
-            return "Pomodoro Timer"
+            return localizationManager.text("menu.section.pomodoro_timer")
         }
     }
 
     private func breakMenuTitle() -> String {
-        appState.pomodoroMode == .longBreak ? "Long Break" : "Break Time"
+        appState.pomodoroMode == .longBreak
+            ? localizationManager.text("timer.long_break")
+            : localizationManager.text("timer.short_break")
     }
 
     private func breakTooltip() -> String {
-        appState.pomodoroMode == .longBreak ? "Long break running" : "Break running"
+        appState.pomodoroMode == .longBreak
+            ? localizationManager.text("menu.tooltip.long_break_running")
+            : localizationManager.text("menu.tooltip.break_running")
     }
 
     private func breakEmoji() -> String {
@@ -333,9 +356,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func countdownPauseTitle() -> String {
         switch appState.countdown.state {
         case .paused:
-            return "▶ Resume"
+            return localizationManager.text("menu.resume_with_icon")
         case .running, .idle, .breakRunning, .breakPaused:
-            return "⏸ Pause"
+            return localizationManager.text("menu.pause_with_icon")
         }
     }
 
@@ -352,11 +375,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             item.representedObject = sound
             ambientSoundMenu.addItem(item)
         }
-        let ambientSoundItem = NSMenuItem(title: "Ambient Sound", action: nil, keyEquivalent: "")
+        let ambientSoundItem = NSMenuItem(title: localizationManager.text("audio.ambient_sound"), action: nil, keyEquivalent: "")
         ambientSoundItem.submenu = ambientSoundMenu
         musicMenu.addItem(ambientSoundItem)
 
-        let musicItem = NSMenuItem(title: "Music", action: nil, keyEquivalent: "")
+        let musicItem = NSMenuItem(title: localizationManager.text("main.sidebar.audio_music"), action: nil, keyEquivalent: "")
         musicItem.submenu = musicMenu
         return musicItem
     }
@@ -364,9 +387,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func musicPlayPauseTitle() -> String {
         switch musicController.playbackState {
         case .playing:
-            return "⏸ Pause"
+            return localizationManager.text("menu.pause_with_icon")
         case .paused, .idle:
-            return "▶ Play"
+            return localizationManager.text("menu.play_with_icon")
         }
     }
 

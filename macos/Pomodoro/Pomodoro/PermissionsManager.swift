@@ -249,35 +249,35 @@ final class PermissionsManager: ObservableObject {
     var notificationStatusText: String {
         switch notificationStatus {
         case .notDetermined:
-            return "Not Requested"
+            return LocalizationManager.shared.text("permission.not_determined")
         case .denied:
-            return "Denied"
+            return LocalizationManager.shared.text("permission.denied")
         case .authorized, .provisional:
-            return "Authorized"
+            return LocalizationManager.shared.text("permission.authorized")
         case .ephemeral:
-            return "Ephemeral"
+            return LocalizationManager.shared.text("permission.ephemeral")
         @unknown default:
-            return "Unknown"
+            return LocalizationManager.shared.text("permission.unknown")
         }
     }
     
     var calendarStatusText: String {
         if #available(macOS 14.0, *) {
             switch calendarStatus {
-            case .notDetermined: return "Not Requested"
-            case .restricted: return "Restricted"
-            case .denied: return "Denied"
-            case .fullAccess: return "Full Access"
-            case .writeOnly: return "Write Only"
-            default: return "Unknown"
+            case .notDetermined: return LocalizationManager.shared.text("permission.not_determined")
+            case .restricted: return LocalizationManager.shared.text("permission.restricted")
+            case .denied: return LocalizationManager.shared.text("permission.denied")
+            case .fullAccess: return LocalizationManager.shared.text("permission.full_access")
+            case .writeOnly: return LocalizationManager.shared.text("permission.write_only")
+            default: return LocalizationManager.shared.text("permission.unknown")
             }
         } else {
             switch calendarStatus {
-            case .notDetermined: return "Not Requested"
-            case .restricted: return "Restricted"
-            case .denied: return "Denied"
-            case .authorized: return "Authorized"
-            default: return "Unknown"
+            case .notDetermined: return LocalizationManager.shared.text("permission.not_determined")
+            case .restricted: return LocalizationManager.shared.text("permission.restricted")
+            case .denied: return LocalizationManager.shared.text("permission.denied")
+            case .authorized: return LocalizationManager.shared.text("permission.authorized")
+            default: return LocalizationManager.shared.text("permission.unknown")
             }
         }
     }
@@ -285,20 +285,20 @@ final class PermissionsManager: ObservableObject {
     var remindersStatusText: String {
         if #available(macOS 14.0, *) {
             switch remindersStatus {
-            case .notDetermined: return "Not Requested"
-            case .restricted: return "Restricted"
-            case .denied: return "Denied"
-            case .fullAccess: return "Full Access"
-            case .writeOnly: return "Write Only"
-            default: return "Unknown"
+            case .notDetermined: return LocalizationManager.shared.text("permission.not_determined")
+            case .restricted: return LocalizationManager.shared.text("permission.restricted")
+            case .denied: return LocalizationManager.shared.text("permission.denied")
+            case .fullAccess: return LocalizationManager.shared.text("permission.full_access")
+            case .writeOnly: return LocalizationManager.shared.text("permission.write_only")
+            default: return LocalizationManager.shared.text("permission.unknown")
             }
         } else {
             switch remindersStatus {
-            case .notDetermined: return "Not Requested"
-            case .restricted: return "Restricted"
-            case .denied: return "Denied"
-            case .authorized: return "Authorized"
-            default: return "Unknown"
+            case .notDetermined: return LocalizationManager.shared.text("permission.not_determined")
+            case .restricted: return LocalizationManager.shared.text("permission.restricted")
+            case .denied: return LocalizationManager.shared.text("permission.denied")
+            case .authorized: return LocalizationManager.shared.text("permission.authorized")
+            default: return LocalizationManager.shared.text("permission.unknown")
             }
         }
     }

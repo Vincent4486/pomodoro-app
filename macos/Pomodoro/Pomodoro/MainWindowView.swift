@@ -15,6 +15,7 @@ struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var musicController: MusicController
     @EnvironmentObject private var audioSourceStore: AudioSourceStore
+    @EnvironmentObject private var languageManager: LanguageManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workMinutesText = ""
     @State private var shortBreakMinutesText = ""
@@ -139,7 +140,7 @@ struct MainWindowView: View {
     private var sidebar: some View {
         List(selection: $sidebarSelection) {
             ForEach(SidebarItem.allCases) { item in
-                Label(item.title, systemImage: item.systemImage)
+                Label(languageManager.text(item.localizationKey), systemImage: item.systemImage)
                     .tag(item)
             }
         }
@@ -186,32 +187,32 @@ struct MainWindowView: View {
                     // Flow-mode-inspired gentle tick dissolve to keep time feeling fluid.
                     .animation(mainTimerUpdateAnimation, value: appState.pomodoro.remainingSeconds)
                     .animation(timerStateAnimation, value: pomodoroStatePulse)
-                Text("State: \(labelForPomodoroState(appState.pomodoro.state))")
+                Text(languageManager.format("timer.state_format", labelForPomodoroState(appState.pomodoro.state)))
                     .font(.system(size: 15, weight: .medium, design: .default))
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Preset")
+                Text(languageManager.text("timer.preset"))
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(.secondary)
-                Picker("Preset", selection: presetSelectionBinding) {
+                Picker(languageManager.text("timer.preset"), selection: presetSelectionBinding) {
                     ForEach(Preset.builtIn) { preset in
                         Text(preset.name)
                             .tag(PresetSelection.preset(preset))
                     }
-                    Text("Custom")
+                    Text(languageManager.text("timer.custom"))
                         .tag(PresetSelection.custom)
                 }
                 .pickerStyle(.segmented)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Durations")
+                Text(languageManager.text("timer.durations"))
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(.secondary)
                 DurationInputRow(
-                    title: "Work",
+                    title: languageManager.text("timer.work"),
                     text: $workMinutesText,
                     field: .work,
                     focusedField: $focusedField,
@@ -221,7 +222,7 @@ struct MainWindowView: View {
                 }
 
                 DurationInputRow(
-                    title: "Short Break",
+                    title: languageManager.text("timer.short_break"),
                     text: $shortBreakMinutesText,
                     field: .shortBreak,
                     focusedField: $focusedField,
@@ -231,7 +232,7 @@ struct MainWindowView: View {
                 }
 
                 DurationInputRow(
-                    title: "Long Break",
+                    title: languageManager.text("timer.long_break"),
                     text: $longBreakMinutesText,
                     field: .longBreak,
                     focusedField: $focusedField,
@@ -249,19 +250,19 @@ struct MainWindowView: View {
 
             HStack(spacing: 10) {
                 let actions = pomodoroActions(for: appState.pomodoro.state)
-                ActionButton("Start", isEnabled: actions.canStart) {
+                ActionButton(languageManager.text("common.start"), isEnabled: actions.canStart) {
                     appState.pomodoro.start()
                 }
-                ActionButton("Pause", isEnabled: actions.canPause) {
+                ActionButton(languageManager.text("common.pause"), isEnabled: actions.canPause) {
                     appState.pomodoro.pause()
                 }
-                ActionButton("Resume", isEnabled: actions.canResume) {
+                ActionButton(languageManager.text("common.resume"), isEnabled: actions.canResume) {
                     appState.pomodoro.resume()
                 }
-                ActionButton("Reset") {
+                ActionButton(languageManager.text("common.reset")) {
                     appState.pomodoro.reset()
                 }
-                ActionButton("Skip Break", isEnabled: actions.canSkipBreak) {
+                ActionButton(languageManager.text("timer.skip_break"), isEnabled: actions.canSkipBreak) {
                     appState.pomodoro.skipBreak()
                 }
             }
@@ -283,7 +284,7 @@ struct MainWindowView: View {
     private var countdownView: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Countdown")
+                Text(languageManager.text("timer.countdown"))
                     .font(.system(.headline, design: .default))
                     .foregroundStyle(.secondary)
                 Text(formattedTime(appState.countdown.remainingSeconds))
@@ -293,17 +294,17 @@ struct MainWindowView: View {
                     .contentTransition(.numericText())
                     .animation(mainTimerUpdateAnimation, value: appState.countdown.remainingSeconds)
                     .animation(timerStateAnimation, value: countdownStatePulse)
-                Text("State: \(appState.countdown.state.rawValue.capitalized)")
+                Text(languageManager.format("timer.state_format", labelForPomodoroState(appState.countdown.state)))
                     .font(.system(size: 15, weight: .medium, design: .default))
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Duration")
+                Text(languageManager.text("timer.duration"))
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(.secondary)
                 DurationInputRow(
-                    title: "Countdown",
+                    title: languageManager.text("timer.countdown"),
                     text: $countdownMinutesText,
                     field: .countdown,
                     focusedField: $focusedField,
@@ -315,16 +316,16 @@ struct MainWindowView: View {
 
             HStack(spacing: 10) {
                 let actions = countdownActions(for: appState.countdown.state)
-                ActionButton("Start", isEnabled: actions.canStart) {
+                ActionButton(languageManager.text("common.start"), isEnabled: actions.canStart) {
                     appState.countdown.start()
                 }
-                ActionButton("Pause", isEnabled: actions.canPause) {
+                ActionButton(languageManager.text("common.pause"), isEnabled: actions.canPause) {
                     appState.countdown.pause()
                 }
-                ActionButton("Resume", isEnabled: actions.canResume) {
+                ActionButton(languageManager.text("common.resume"), isEnabled: actions.canResume) {
                     appState.countdown.resume()
                 }
-                ActionButton("Reset") {
+                ActionButton(languageManager.text("common.reset")) {
                     appState.countdown.reset()
                 }
             }
@@ -369,7 +370,7 @@ struct MainWindowView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .center, spacing: 8) {
-                    Text("Today's Summary")
+                    Text(languageManager.text("main.summary.title"))
                         .font(.system(size: 22, weight: .semibold, design: .default))
                         .foregroundStyle(.secondary)
                     summarySection
@@ -404,8 +405,8 @@ struct MainWindowView: View {
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 18) {
-                    SettingsSectionCard(title: "Notifications") {
-                        Picker("Delivery", selection: $appState.notificationDeliveryStyle) {
+                    SettingsSectionCard(title: languageManager.text("settings.notifications.title")) {
+                        Picker(languageManager.text("main.delivery"), selection: $appState.notificationDeliveryStyle) {
                             ForEach(NotificationDeliveryStyle.allCases) { style in
                                 Text(style.title)
                                     .tag(style)
@@ -413,7 +414,7 @@ struct MainWindowView: View {
                         }
                         .pickerStyle(.segmented)
 
-                        Picker("Notifications", selection: $appState.notificationPreference) {
+                        Picker(languageManager.text("settings.notifications.title"), selection: $appState.notificationPreference) {
                             ForEach(NotificationPreference.allCases) { preference in
                                 Text(preference.title)
                                     .tag(preference)
@@ -421,7 +422,7 @@ struct MainWindowView: View {
                         }
                         .pickerStyle(.segmented)
 
-                        Picker("Reminder", selection: $appState.reminderPreference) {
+                        Picker(languageManager.text("main.reminder"), selection: $appState.reminderPreference) {
                             ForEach(ReminderPreference.allCases) { preference in
                                 Text(preference.title)
                                     .tag(preference)
@@ -430,8 +431,20 @@ struct MainWindowView: View {
                         .pickerStyle(.segmented)
                     }
 
-                    SettingsSectionCard(title: "Permissions & Sync") {
+                    SettingsSectionCard(title: languageManager.text("settings.permissions_sync.title")) {
                         SettingsView(permissionsManager: permissionsManager)
+                    }
+
+                    SettingsSectionCard(title: languageManager.text("settings.language.title")) {
+                        Picker(languageManager.text("settings.language.picker.label"), selection: $languageManager.currentLanguage) {
+                            Text(languageManager.text("settings.language.system"))
+                                .tag(LanguageManager.AppLanguage.auto)
+                            Text(languageManager.text("settings.language.english"))
+                                .tag(LanguageManager.AppLanguage.english)
+                            Text(languageManager.text("settings.language.chinese"))
+                                .tag(LanguageManager.AppLanguage.chinese)
+                        }
+                        .pickerStyle(.segmented)
                     }
                 }
                 .padding(.vertical, 24)
@@ -504,7 +517,7 @@ struct MainWindowView: View {
 
     private var nowPlayingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Now Playing")
+            Text(languageManager.text("audio.now_playing"))
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(.primary)
 
@@ -541,7 +554,7 @@ struct MainWindowView: View {
                     .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Volume (system)")
+                        Text(languageManager.text("audio.volume.system"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Slider(value: .constant(Double(musicController.focusVolume)), in: 0...1, onEditingChanged: { _ in })
@@ -573,7 +586,7 @@ struct MainWindowView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(type.displayName)
                             .font(.system(.title3, design: .rounded).weight(.semibold))
-                        Text("Ambient · Local")
+                        Text(languageManager.text("audio.ambient_local"))
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
@@ -592,7 +605,7 @@ struct MainWindowView: View {
                     .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Volume")
+                        Text(languageManager.text("audio.volume"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Slider(value: ambientVolumeBinding, in: 0...1, onEditingChanged: { editing in
@@ -632,9 +645,9 @@ struct MainWindowView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("No audio playing")
+                        Text(languageManager.text("audio.none_playing"))
                             .font(.system(.title3, design: .rounded).weight(.semibold))
-                        Text("Start Apple Music, Spotify, or select an ambient sound")
+                        Text(languageManager.text("audio.start_external_hint"))
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
@@ -647,13 +660,13 @@ struct MainWindowView: View {
 
     private var sourceSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Audio Source")
+            Text(languageManager.text("audio.source"))
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(.primary)
 
             HStack(spacing: 10) {
                 selectorButton(
-                    title: "External",
+                    title: languageManager.text("audio.source.external"),
                     isActive: externalActive,
                     isDisabled: !externalActive,
                     action: { }
@@ -785,17 +798,17 @@ struct MainWindowView: View {
     private func notificationStatusText(_ status: UNAuthorizationStatus) -> String {
         switch status {
         case .notDetermined:
-            return "Not Determined"
+            return languageManager.text("permission.not_determined")
         case .denied:
-            return "Denied"
+            return languageManager.text("permission.denied")
         case .authorized:
-            return "Authorized"
+            return languageManager.text("permission.authorized")
         case .provisional:
-            return "Provisional"
+            return languageManager.text("permission.provisional")
         case .ephemeral:
-            return "Ephemeral"
+            return languageManager.text("permission.ephemeral")
         @unknown default:
-            return "Unknown"
+            return languageManager.text("permission.unknown")
         }
     }
 
@@ -815,19 +828,19 @@ struct MainWindowView: View {
     private func eventStatusText(_ status: EKAuthorizationStatus) -> String {
         switch status {
         case .notDetermined:
-            return "Not Determined"
+            return languageManager.text("permission.not_determined")
         case .restricted:
-            return "Restricted"
+            return languageManager.text("permission.restricted")
         case .denied:
-            return "Denied"
+            return languageManager.text("permission.denied")
         case .authorized:
-            return "Authorized"
+            return languageManager.text("permission.authorized")
         case .fullAccess:
-            return "Full Access"
+            return languageManager.text("permission.full_access")
         case .writeOnly:
-            return "Write Only"
+            return languageManager.text("permission.write_only")
         @unknown default:
-            return "Unknown"
+            return languageManager.text("permission.unknown")
         }
     }
 
@@ -863,24 +876,24 @@ struct MainWindowView: View {
 
         var id: String { rawValue }
 
-        var title: String {
+        var localizationKey: String {
             switch self {
             case .pomodoro:
-                return "Pomodoro"
+                return "main.sidebar.pomodoro"
             case .flow:
-                return "Flow"
+                return "main.sidebar.flow"
             case .countdown:
-                return "Countdown"
+                return "main.sidebar.countdown"
             case .tasks:
-                return "Tasks"
+                return "main.sidebar.tasks"
             case .calendar:
-                return "Calendar"
+                return "main.sidebar.calendar"
             case .audioAndMusic:
-                return "Audio&Music"
+                return "main.sidebar.audio_music"
             case .summary:
-                return "Summary"
+                return "main.sidebar.summary"
             case .settings:
-                return "Settings"
+                return "main.sidebar.settings"
             }
         }
 
@@ -907,6 +920,7 @@ struct MainWindowView: View {
     }
 
     private struct DurationInputRow: View {
+        @EnvironmentObject private var languageManager: LanguageManager
         let title: String
         @Binding var text: String
         let field: DurationField
@@ -933,14 +947,14 @@ struct MainWindowView: View {
                         .onSubmit {
                             onCommit()
                         }
-                    Text("min")
+                    Text(languageManager.text("common.min_short"))
                         .foregroundStyle(.secondary)
                         .font(.system(.callout, design: .rounded))
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(title) minutes")
-            .accessibilityHint("Enter a number and press return")
+            .accessibilityLabel(languageManager.format("timer.accessibility.minutes_label", title))
+            .accessibilityHint(languageManager.text("timer.accessibility.minutes_hint"))
         }
     }
 
@@ -978,16 +992,17 @@ struct MainWindowView: View {
     }
 
     private struct LongBreakIntervalRow: View {
+        @EnvironmentObject private var languageManager: LanguageManager
         @Binding var interval: Int
         let onCommit: () -> Void
 
         var body: some View {
             HStack {
-                Text("Long Break Interval")
+                Text(languageManager.text("timer.long_break_interval"))
                     .font(.system(.body, design: .rounded))
                 Spacer()
                 Stepper(value: $interval, in: 1...12) {
-                    Text("Every \(interval) sessions")
+                    Text(languageManager.format("timer.long_break_interval.every_sessions", interval))
                         .font(.system(.body, design: .rounded).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -996,8 +1011,8 @@ struct MainWindowView: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Long break interval")
-            .accessibilityHint("Choose how many work sessions before a long break")
+            .accessibilityLabel(languageManager.text("timer.long_break_interval"))
+            .accessibilityHint(languageManager.text("timer.long_break_interval.hint"))
         }
     }
 
@@ -1069,9 +1084,9 @@ struct MainWindowView: View {
         let hours = clampedSeconds / 3600
         let minutes = (clampedSeconds % 3600) / 60
         if hours > 0 {
-            return "\(hours)h \(minutes)m"
+            return languageManager.format("duration.hours_minutes", hours, minutes)
         }
-        return "\(minutes)m"
+        return languageManager.format("duration.minutes", minutes)
     }
 
     private enum SummaryState {
@@ -1091,14 +1106,14 @@ struct MainWindowView: View {
         Group {
             switch summaryState {
             case .empty:
-                Text("No sessions logged yet today.")
+                Text(languageManager.text("summary.no_sessions_today"))
                     .foregroundStyle(.secondary)
                     .font(.system(.subheadline, design: .rounded))
             case .stats(let stats):
                 VStack(alignment: .leading, spacing: 6) {
-                    SummaryRow(title: "Focus time", value: formattedDuration(stats.totalFocusSeconds))
-                    SummaryRow(title: "Break time", value: formattedDuration(stats.totalBreakSeconds))
-                    SummaryRow(title: "Sessions", value: "\(stats.completedSessions)")
+                    SummaryRow(title: languageManager.text("summary.focus_time"), value: formattedDuration(stats.totalFocusSeconds))
+                    SummaryRow(title: languageManager.text("summary.break_time"), value: formattedDuration(stats.totalBreakSeconds))
+                    SummaryRow(title: languageManager.text("summary.sessions"), value: "\(stats.completedSessions)")
                 }
             }
         }
@@ -1107,10 +1122,10 @@ struct MainWindowView: View {
     private var summaryFocusTiles: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Today's Focus")
+                Text(languageManager.text("summary.today_focus"))
                     .font(.headline)
                     .foregroundStyle(.secondary)
-                Text("\(todayFocusMinutes)m")
+                Text(languageManager.format("summary.today_focus_minutes_short", todayFocusMinutes))
                     .font(.title)
                     .fontWeight(.semibold)
             }
@@ -1120,7 +1135,7 @@ struct MainWindowView: View {
             .cornerRadius(10)
             
             VStack(alignment: .leading, spacing: 6) {
-                Text("Completion")
+                Text(languageManager.text("summary.completion"))
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 Text("\(Int(completionRate * 100))%")
@@ -1136,13 +1151,13 @@ struct MainWindowView: View {
     
     private var weeklyFocusChart: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Weekly Focus Trend")
+            Text(languageManager.text("summary.weekly_trend"))
                 .font(.headline)
                 .foregroundStyle(.secondary)
             Chart(weeklyFocusPoints) { point in
                 BarMark(
-                    x: .value("Day", shortWeekdayFormatter.string(from: point.date)),
-                    y: .value("Minutes", point.minutes)
+                    x: .value(languageManager.text("summary.chart.day"), shortWeekdayFormatter.string(from: point.date)),
+                    y: .value(languageManager.text("summary.chart.minutes"), point.minutes)
                 )
             }
             .frame(height: 180)
@@ -1151,12 +1166,12 @@ struct MainWindowView: View {
     
     private var completionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Task Completion")
+            Text(languageManager.text("summary.task_completion"))
                 .font(.headline)
                 .foregroundStyle(.secondary)
             
             if todoStore.items.isEmpty {
-                Text("No tasks yet.")
+                Text(languageManager.text("summary.no_tasks"))
                     .foregroundStyle(.secondary)
                     .font(.subheadline)
             } else {
@@ -1167,10 +1182,10 @@ struct MainWindowView: View {
                 // Option A: Split into two clear sections to avoid scale imbalance.
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Completion Overview")
+                        Text(languageManager.text("summary.completion_overview"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("\(completedCount) completed")
+                        Text(languageManager.format("summary.completed_count", completedCount))
                             .font(.system(size: 26, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
                     }
@@ -1185,10 +1200,10 @@ struct MainWindowView: View {
                     .cornerRadius(10)
                     
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Current Load")
+                        Text(languageManager.text("summary.current_load"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("\(activeCount) active")
+                        Text(languageManager.format("summary.active_count", activeCount))
                             .font(.system(size: 26, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
                     }
@@ -1208,6 +1223,7 @@ struct MainWindowView: View {
     private var shortWeekdayFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateFormat = "E"
+        formatter.locale = languageManager.effectiveLocale
         return formatter
     }
 
@@ -1234,26 +1250,26 @@ struct MainWindowView: View {
     private func labelForPomodoroState(_ state: TimerState) -> String {
         switch state {
         case .idle:
-            return "Idle"
+            return languageManager.text("timer.state.idle")
         case .running:
-            return "Running"
+            return languageManager.text("timer.state.running")
         case .paused:
-            return "Paused"
+            return languageManager.text("timer.state.paused")
         case .breakRunning:
-            return "Break (Running)"
+            return languageManager.text("timer.state.break_running")
         case .breakPaused:
-            return "Break (Paused)"
+            return languageManager.text("timer.state.break_paused")
         }
     }
 
     private func titleForPomodoroMode(_ mode: PomodoroTimerEngine.Mode) -> String {
         switch mode {
         case .work:
-            return "Pomodoro"
+            return languageManager.text("timer.mode.pomodoro")
         case .breakTime:
-            return "Break"
+            return languageManager.text("timer.mode.break")
         case .longBreak:
-            return "Long Break"
+            return languageManager.text("timer.mode.long_break")
         }
     }
 

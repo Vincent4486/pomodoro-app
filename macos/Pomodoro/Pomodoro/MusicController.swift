@@ -32,7 +32,14 @@ enum MediaSource: String {
     case appleMusic = "Apple Music"
     case unknown = "External Audio"
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .appleMusic:
+            return rawValue
+        case .unknown:
+            return LocalizationManager.shared.text("audio.external_audio")
+        }
+    }
 }
 
 struct ExternalMedia {
@@ -68,15 +75,15 @@ enum FocusSoundType: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .off:
-            return "Off"
+            return LocalizationManager.shared.text("audio.sound.off")
         case .white:
-            return "White"
+            return LocalizationManager.shared.text("audio.sound.white")
         case .brown:
-            return "Brown"
+            return LocalizationManager.shared.text("audio.sound.brown")
         case .rain:
-            return "Rain"
-    case .wind:
-            return "Wind"
+            return LocalizationManager.shared.text("audio.sound.rain")
+        case .wind:
+            return LocalizationManager.shared.text("audio.sound.wind")
         }
     }
 }
@@ -223,7 +230,7 @@ final class ExternalAudioMonitor: ObservableObject {
 
         let external = ExternalMedia(
             title: state.title,
-            artist: state.artist.isEmpty ? "Unknown Artist" : state.artist,
+            artist: state.artist.isEmpty ? LocalizationManager.shared.text("audio.unknown_artist") : state.artist,
             album: nil,
             artwork: state.artwork,
             source: .appleMusic

@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class LocalMediaPlayer: ObservableObject {
     @Published private(set) var isPlaying = false
-    @Published private(set) var currentTrackTitle: String = "No Track Selected"
+    @Published private(set) var currentTrackTitle: String = LocalizationManager.shared.text("audio.no_track_selected")
 
     private let player = AVQueuePlayer()
     private var trackURLs: [URL] = []
@@ -91,7 +91,7 @@ final class LocalMediaPlayer: ObservableObject {
     private func rebuildQueue(startingAt index: Int) {
         player.removeAllItems()
         guard trackURLs.indices.contains(index) else {
-            currentTrackTitle = "No Track Selected"
+            currentTrackTitle = LocalizationManager.shared.text("audio.no_track_selected")
             return
         }
 
@@ -104,7 +104,7 @@ final class LocalMediaPlayer: ObservableObject {
 
     private func syncCurrentTrackTitle() {
         guard let urlAsset = player.currentItem?.asset as? AVURLAsset else {
-            currentTrackTitle = "No Track Selected"
+            currentTrackTitle = LocalizationManager.shared.text("audio.no_track_selected")
             return
         }
 

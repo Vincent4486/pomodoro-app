@@ -12,6 +12,7 @@ import UserNotifications
 struct OnboardingFlowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var onboardingState: OnboardingState
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var flow: [OnboardingStep] = []
@@ -31,10 +32,10 @@ struct OnboardingFlowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Text(step.title)
+                Text(localizationManager.text(step.titleKey))
                     .font(.system(.title, design: .rounded).weight(.semibold))
                 Spacer()
-                Button("Not Now") {
+                Button(localizationManager.text("onboarding.not_now")) {
                     onboardingState.markCompleted()
                 }
                 .buttonStyle(.borderless)
@@ -46,12 +47,12 @@ struct OnboardingFlowView: View {
 
             HStack {
                 if index > 0 {
-                    Button("Back") {
+                    Button(localizationManager.text("onboarding.back")) {
                         back()
                     }
                 }
                 Spacer()
-                Button(isLastStep ? "Finish" : "Continue") {
+                Button(isLastStep ? localizationManager.text("onboarding.finish") : localizationManager.text("onboarding.continue")) {
                     advance()
                 }
                 .buttonStyle(.borderedProminent)
@@ -74,17 +75,17 @@ struct OnboardingFlowView: View {
         switch step {
         case .welcome:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Pomodoro helps you focus with structured work and break sessions.")
+                Text(localizationManager.text("onboarding.welcome.body"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         case .notificationStyle:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Choose how you want to be notified when sessions end.")
+                Text(localizationManager.text("onboarding.notification_style.body"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                Picker("Notification Style", selection: $appState.notificationDeliveryStyle) {
+                Picker(localizationManager.text("onboarding.notification_style.title"), selection: $appState.notificationDeliveryStyle) {
                     ForEach(NotificationDeliveryStyle.allCases) { style in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(style.title)
@@ -99,21 +100,21 @@ struct OnboardingFlowView: View {
             }
         case .notificationPermission:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Pomodoro can notify you when sessions end.")
+                Text(localizationManager.text("onboarding.notification_permission.body"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 statusRow
 
                 HStack(spacing: 12) {
-                    Button(isRequestingAuthorization ? "Requesting..." : "Enable Notifications") {
+                    Button(isRequestingAuthorization ? localizationManager.text("onboarding.requesting") : localizationManager.text("onboarding.enable_notifications")) {
                         requestAuthorization()
                     }
                     .buttonStyle(.bordered)
                     .disabled(isRequestingAuthorization)
 
                     if authorizationStatus == .denied {
-                        Button("Open System Settings") {
+                        Button(localizationManager.text("common.open_system_settings")) {
                             openNotificationSettings()
                         }
                         .buttonStyle(.bordered)
@@ -122,25 +123,25 @@ struct OnboardingFlowView: View {
             }
         case .media:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Audio & Music")
+                Text(localizationManager.text("onboarding.media.title"))
                     .font(.system(.headline, design: .rounded))
-                Text("Pomodoro includes built-in focus sounds that work without any permission.")
+                Text(localizationManager.text("onboarding.media.body_primary"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
-                Text("Optional Apple Music or Spotify integration is possible later using their official SDKs.")
+                Text(localizationManager.text("onboarding.media.body_secondary"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         case .systemPermissions:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Calendar & Reminders")
+                Text(localizationManager.text("onboarding.permissions.title"))
                     .font(.system(.headline, design: .rounded))
-                Text("Enable read-only calendar context and optional reminders to link with focus sessions. You can skip and enable later.")
+                Text(localizationManager.text("onboarding.permissions.body"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 12) {
-                    Button("Enable Access") {
+                    Button(localizationManager.text("onboarding.permissions.enable_access")) {
                         Task {
                             isRequestingAuthorization = true
                             await appState.requestCalendarAndReminderAccessIfNeeded()
@@ -152,7 +153,7 @@ struct OnboardingFlowView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(isRequestingAuthorization)
 
-                    Button("Not Now") {
+                    Button(localizationManager.text("onboarding.not_now")) {
                         onboardingState.markPermissionsPrompted()
                         advance()
                     }
@@ -165,13 +166,13 @@ struct OnboardingFlowView: View {
             }
         case .menuBarTip:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Menu Bar Tip")
+                Text(localizationManager.text("onboarding.menu_bar_tip.title"))
                     .font(.system(.headline, design: .rounded))
-                Text("Pomodoro lives in your macOS menu bar. Hold Command (⌘) and drag icons to reorder, including Pomodoro.")
+                Text(localizationManager.text("onboarding.menu_bar_tip.body"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.secondary)
 
-                Button("Got it") {
+                Button(localizationManager.text("onboarding.got_it")) {
                     onboardingState.markMenuBarTipSeen()
                     advance()
                 }
@@ -194,15 +195,15 @@ struct OnboardingFlowView: View {
     private var statusText: String {
         switch authorizationStatus {
         case .authorized, .provisional:
-            return "Notifications are enabled."
+            return localizationManager.text("onboarding.notifications.enabled")
         case .denied:
-            return "Notifications are turned off in System Settings."
+            return localizationManager.text("onboarding.notifications.denied")
         case .notDetermined:
-            return "Notifications have not been requested yet."
+            return localizationManager.text("onboarding.notifications.not_requested")
         case .ephemeral:
-            return "Notifications are temporarily available."
+            return localizationManager.text("onboarding.notifications.ephemeral")
         @unknown default:
-            return "Notification status unavailable."
+            return localizationManager.text("onboarding.notifications.unavailable")
         }
     }
 
@@ -284,20 +285,20 @@ private enum OnboardingStep: Int, CaseIterable {
     case systemPermissions
     case menuBarTip
 
-    var title: String {
+    var titleKey: String {
         switch self {
         case .welcome:
-            return "Welcome to Pomodoro"
+            return "onboarding.welcome.title"
         case .notificationStyle:
-            return "Notification Style"
+            return "onboarding.notification_style.title"
         case .notificationPermission:
-            return "Enable Notifications"
+            return "onboarding.notification_permission.title"
         case .media:
-            return "Audio & Music"
+            return "onboarding.media.title"
         case .systemPermissions:
-            return "Calendar & Reminders"
+            return "onboarding.permissions.title"
         case .menuBarTip:
-            return "Menu Bar Tip"
+            return "onboarding.menu_bar_tip.title"
         }
     }
 

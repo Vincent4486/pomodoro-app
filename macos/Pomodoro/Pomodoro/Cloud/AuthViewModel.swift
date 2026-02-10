@@ -279,17 +279,17 @@ final class AuthViewModel: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .firebaseNotConfigured:
-                return "Firebase is not configured."
+                return LocalizationManager.shared.text("auth.error.firebase_not_configured")
             case .missingResult:
-                return "Sign in failed."
+                return LocalizationManager.shared.text("auth.error.sign_in_failed")
             case .invalidEmail:
-                return "Please enter a valid email."
+                return LocalizationManager.shared.text("auth.error.invalid_email")
             case .invalidPassword:
-                return "Please enter a valid password."
+                return LocalizationManager.shared.text("auth.error.invalid_password")
             case .notAuthenticated:
-                return "Authentication is required."
+                return LocalizationManager.shared.text("auth.error.authentication_required")
             case .missingToken:
-                return "Missing Firebase ID token."
+                return LocalizationManager.shared.text("auth.error.missing_firebase_id_token")
             }
         }
     }

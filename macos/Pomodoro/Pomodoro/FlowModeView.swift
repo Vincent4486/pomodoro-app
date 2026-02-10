@@ -5,6 +5,7 @@ import Combine
 /// UI-only: no settings or persistence changes.
 struct FlowModeView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Countdown overlay is opt-in; default off to keep the clock calm (time awareness, not urgency).
@@ -75,10 +76,10 @@ struct FlowModeView: View {
     private var topBar: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Focus State")
+                Text(localizationManager.text("flow.focus_state"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text("Calm time awareness")
+                Text(localizationManager.text("flow.calm_time_awareness"))
                     .font(.caption)
                     .foregroundStyle(.secondary.opacity(0.8))
             }
@@ -90,7 +91,7 @@ struct FlowModeView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "timer")
                             .font(.title3.weight(.semibold))
-                        Text("Timer")
+                        Text(localizationManager.text("timer.timer"))
                             .font(.subheadline.weight(.semibold))
                     }
                     .padding(.horizontal, 12)
@@ -109,14 +110,14 @@ struct FlowModeView: View {
                     DragGesture(minimumDistance: 0)
                         .updating($timerPressing) { _, state, _ in state = true }
                 )
-                .accessibilityLabel("Show Pomodoro timer")
+                .accessibilityLabel(localizationManager.text("flow.accessibility.show_pomodoro_timer"))
             }
 
             Button(action: exitAction) {
                 HStack(spacing: 6) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title3.weight(.semibold))
-                    Text("Exit Flow")
+                    Text(localizationManager.text("flow.exit"))
                         .font(.subheadline)
                         .fontWeight(.semibold)
                 }
@@ -136,9 +137,9 @@ struct FlowModeView: View {
                 DragGesture(minimumDistance: 0)
                     .updating($exitPressing) { _, state, _ in state = true }
             )
-            .help("Return to main workspace")
+            .help(localizationManager.text("flow.help.return_main_workspace"))
             .keyboardShortcut(.escape, modifiers: [])
-            .accessibilityLabel("Exit Flow Mode")
+            .accessibilityLabel(localizationManager.text("flow.accessibility.exit_mode"))
         }
     }
 
@@ -157,7 +158,7 @@ struct FlowModeView: View {
                     .contentTransition(.numericText())
                     // Minutes-only animation: barely-there dissolve when minutes roll.
                     .animation(minuteMorphAnimation, value: minuteMorphToken(for: currentDate))
-                    .accessibilityLabel("Current time")
+                    .accessibilityLabel(localizationManager.text("flow.accessibility.current_time"))
 
                 if shouldShowTimerChip {
                     timerChip
@@ -211,6 +212,7 @@ struct FlowModeView: View {
             .dateTime
                 .hour(.defaultDigits(amPM: .abbreviated))
                 .minute(.twoDigits)
+                .locale(localizationManager.effectiveLocale)
         )
     }
     
@@ -220,6 +222,7 @@ struct FlowModeView: View {
             .dateTime
                 .hour(.defaultDigits(amPM: .abbreviated))
                 .minute(.twoDigits)
+                .locale(localizationManager.effectiveLocale)
         )
     }
     
@@ -292,13 +295,13 @@ struct FlowModeView: View {
     private var timerStatusLabel: String {
         switch appState.pomodoro.state {
         case .running:
-            return "running"
+            return localizationManager.text("timer.state.running")
         case .breakRunning:
-            return "break"
+            return localizationManager.text("timer.mode.break")
         case .paused, .breakPaused:
-            return "paused"
+            return localizationManager.text("timer.state.paused")
         case .idle:
-            return "ready"
+            return localizationManager.text("timer.state.idle")
         }
     }
 
@@ -395,6 +398,7 @@ private extension FlowModeView {
 private struct AmbientAudioStrip: View {
     @EnvironmentObject private var musicController: MusicController
     @EnvironmentObject private var audioSourceStore: AudioSourceStore
+    @EnvironmentObject private var localizationManager: LocalizationManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ambientVolume: Double = 0.4
     @State private var sliderEditing = false
@@ -445,7 +449,7 @@ private struct AmbientAudioStrip: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(ambientTitle)
                         .font(.subheadline.weight(.semibold))
-                    Text("Ambient · Local")
+                    Text(localizationManager.text("audio.ambient_local"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -482,7 +486,7 @@ private struct AmbientAudioStrip: View {
                     withAnimation(.easeOut(duration: 0.18)) { sliderHover = hovering }
                 }
             }
-            .accessibilityLabel("Ambient volume")
+            .accessibilityLabel(localizationManager.text("audio.accessibility.ambient_volume"))
             .onChange(of: ambientVolume) { _, newValue in
                 audioSourceStore.setVolume(Float(newValue))
             }
@@ -495,7 +499,7 @@ private struct AmbientAudioStrip: View {
                 .frame(width: 52, height: 52)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Now Playing · \(media.source.displayName)")
+                Text(localizationManager.format("audio.now_playing_source", media.source.displayName))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(media.title)
@@ -519,7 +523,9 @@ private struct AmbientAudioStrip: View {
         if case .ambient(let type) = audioSourceStore.audioSource {
             return type.displayName
         }
-        return musicController.currentFocusSound == .off ? "White Noise" : musicController.currentFocusSound.displayName
+        return musicController.currentFocusSound == .off
+            ? localizationManager.text("audio.sound.white_noise")
+            : musicController.currentFocusSound.displayName
     }
 
     private var soundIcon: Image {

@@ -86,14 +86,16 @@ final class FeatureGate: ObservableObject {
     }
 
     var aiActionDisabledReason: String? {
+        let l10n = LocalizationManager.shared
         if !canUseCloudProxyAI {
-            return "Your current tier does not include AI access."
+            return l10n.text("feature_gate.ai_access_unavailable")
         }
         if isAIQuotaExhausted {
+            Self.resetFormatter.locale = l10n.effectiveLocale
             if let resetText = allowanceResetAt.map(Self.resetFormatter.string(from:)) {
-                return "AI quota exhausted. It will refresh on \(resetText)."
+                return l10n.format("feature_gate.ai_quota_exhausted_refresh_on", resetText)
             }
-            return "AI quota exhausted for this cycle."
+            return l10n.text("feature_gate.ai_quota_exhausted")
         }
         return nil
     }
@@ -132,9 +134,9 @@ final class FeatureGate: ObservableObject {
                 apply(payload: payload)
             case 401:
                 resetToSignedOutState()
-                allowanceErrorMessage = "Session expired. Please sign in again."
+                allowanceErrorMessage = LocalizationManager.shared.text("feature_gate.session_expired_sign_in_again")
             case 403:
-                allowanceErrorMessage = "Your account cannot access allowance data."
+                allowanceErrorMessage = LocalizationManager.shared.text("feature_gate.allowance_access_forbidden")
             default:
                 throw GateError.httpStatus(httpResponse.statusCode)
             }
@@ -198,11 +200,11 @@ final class FeatureGate: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .invalidResponse:
-                return "Invalid allowance response."
+                return LocalizationManager.shared.text("feature_gate.error.invalid_allowance_response")
             case .decodingFailed:
-                return "Failed to decode allowance payload."
+                return LocalizationManager.shared.text("feature_gate.error.decoding_failed")
             case .httpStatus(let status):
-                return "Allowance request failed with status \(status)."
+                return LocalizationManager.shared.format("feature_gate.error.http_status", status)
             }
         }
     }
@@ -323,12 +325,12 @@ final class FeatureGate: ObservableObject {
 
     static func tierDisplayName(_ tier: Tier) -> String {
         switch tier {
-        case .free: return "Free"
-        case .beta: return "Beta"
-        case .plus: return "Plus"
-        case .pro: return "Pro"
-        case .expired: return "Expired"
-        case .developer: return "Developer"
+        case .free: return LocalizationManager.shared.text("feature_gate.tier.free")
+        case .beta: return LocalizationManager.shared.text("feature_gate.tier.beta")
+        case .plus: return LocalizationManager.shared.text("feature_gate.tier.plus")
+        case .pro: return LocalizationManager.shared.text("feature_gate.tier.pro")
+        case .expired: return LocalizationManager.shared.text("feature_gate.tier.expired")
+        case .developer: return LocalizationManager.shared.text("feature_gate.tier.developer")
         }
     }
 }

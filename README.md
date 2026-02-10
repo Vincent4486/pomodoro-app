@@ -142,29 +142,13 @@ The goal of upcoming versions is to transition toward a softer, macOS-inspired l
 >
 >Pomodoro is currently under active development and not yet available on TestFlight or the Mac App Store.<br>
 >
->Why?<br>
->The Apple Developer Program enrollment is in progress.<br>
->Once the developer account is active, TestFlight builds will be distributed immediately.<br>
+>**🚀 Coming next: TestFlight**
 >
->What this means for now<br>
->❌ No App Store / TestFlight builds yet<br>
->❌ No automatic updates<br>
->✅ Local development builds continue normally<br>
->✅ All core features are being actively built and tested<br>
+>Apple TestFlight preview builds are launching soon. <br>
+>Pomodoro App is **transitioning** to Apple's distribution (TestFlight → App Store). <br>
 >
->What’s coming next<br>
->🧪 TestFlight beta access (first priority)<br>
->🔄 Seamless updates via Apple’s official update system<br>
->📦 Mac App Store submission after stabilization<br>
->
->Timeline (estimated)<br>
->Apple Developer account: in a few weeks<br>
->TestFlight beta: shortly after account activation<br>
->Public App Store release: after feedback & polish<br>
->
->Follow progress<br>
->Development updates are posted regularly in this repository<br>
->Feature work continues during this waiting period — no downtime<br>
+>Join the waitlist:
+>https://forms.gle/hQ7ubqxt39sXca4e9
 >
 >Thank you for your patience and interest ❤️
 

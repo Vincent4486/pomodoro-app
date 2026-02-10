@@ -88,6 +88,23 @@ Clone this repository, open the project in Xcode, and build/run as usual.
 This project uses Swift Package Manager to manage dependencies. <br>
 The current version is fully native Swift; legacy Tauri/Svelte/Python versions are archived.
 
+>## ⚠️ Firebase Config File Usage
+>
+>This project includes `GoogleService-Info.plist` for CI build and Firebase integration.
+>
+>### ⚠️ DO NOT USE THIS FILE DIRECTLY
+>
+>The included `GoogleService-Info.plist` is specific to this repository’s Firebase project and **should NOT be used (as a template) for other projects**.
+>
+>If you need to run your own Firebase instance, please follow these steps:
+>1. Create your own Firebase project
+>2. Download your own `GoogleService-Info.plist`
+>3. Replace the existing file locally for your environment
+>4. **Never commit your own plist file to the repository**
+>
+>See Example:
+>`GoogleService-Info.plist.sample`
+
 ## Version status
 
 Current Version: <br>

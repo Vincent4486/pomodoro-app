@@ -297,6 +297,7 @@ body.lang-switching-in [data-en] {
   display: grid;
   gap: 18px;
   align-content: center;
+  min-width: 0;
 }
 .sponsor-table-card {
   display: grid;
@@ -327,11 +328,13 @@ body.lang-switching-in [data-en] {
   color: inherit;
 }
 .sponsor-link img {
-  width: min(260px, 80%);
+  width: min(260px, 100%);
   max-width: 280px;
   height: auto;
   display: block;
   margin: 2px auto 4px;
+  opacity: 1;
+  visibility: visible;
 }
 .sponsor-description {
   margin: 0;

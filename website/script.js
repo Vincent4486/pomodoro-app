@@ -844,3 +844,11 @@ startContributorRibbon();
 loadFooterHeartbeat();
 window.setInterval(loadFooterHeartbeat, FOOTER_REFRESH_MS);
 startProjectStatus();
+
+const sponsorImg = document.querySelector('.sponsor-link img');
+if (sponsorImg) {
+  sponsorImg.addEventListener('error', () => {
+    console.error('Sponsor logo failed:', sponsorImg.src);
+    sponsorImg.alt = 'Sponsor logo unavailable';
+  });
+}

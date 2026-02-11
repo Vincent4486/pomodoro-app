@@ -337,12 +337,13 @@ body.lang-switching-in [data-en] {
 }
 .sponsor-link img {
   width: 240px;
-  max-width: 100%;
+  max-width: 240px;
   height: auto;
   display: block;
   margin: 2px auto 4px;
   opacity: 1;
   visibility: visible;
+  object-fit: contain;
 }
 .sponsor-description {
   margin: 0;

@@ -314,12 +314,13 @@ This project is supported by partners who help keep development sustainable.
 | Category | Partner |
 |----------|---------|
 | Infrastructure Sponsor | VPS.Town |
-| AI Partner | *(open)* |
-| Community Partner | *(open)* |
-| Tools / Integration Partner | *(open)* |
-| Other | *(open)* |
+| AI Partner | Available |
+| Community Partner | Available |
+| Tools / Integration Partner | Available |
+| Other | Available |
 
-If you are interested in sponsoring or partnering with Pomodoro, please contact us below.
+Interested in sponsoring or partnering with Pomodoro App?
+Contact us below.
 
 ## 📈 Star History
 
@@ -331,7 +332,6 @@ If you are interested in sponsoring or partnering with Pomodoro, please contact 
 
 This project is under active development and some features or UI elements may change over time.<br>
 If you encounter issues or have suggestions, feel free to open an issue or pull request.
-
 
 ## 📬 Contact
 

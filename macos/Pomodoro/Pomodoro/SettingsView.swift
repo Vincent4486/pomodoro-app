@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct SettingsView: View {
     @ObservedObject var permissionsManager: PermissionsManager
 
@@ -9,6 +10,8 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(permissionsManager: .shared)
-        .environmentObject(AuthViewModel.shared)
+    MainActor.assumeIsolated {
+        SettingsView(permissionsManager: .shared)
+            .environmentObject(AuthViewModel.shared)
+    }
 }

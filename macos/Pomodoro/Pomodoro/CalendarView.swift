@@ -4,6 +4,7 @@ import AppKit
 
 /// Calendar view showing time-based events and allowing event creation.
 /// Blocked when unauthorized with explanation and enable button.
+@MainActor
 struct CalendarView: View {
     @ObservedObject var calendarManager: CalendarManager
     @ObservedObject var permissionsManager: PermissionsManager
@@ -64,6 +65,15 @@ struct CalendarView: View {
         .frame(minWidth: 520, idealWidth: 680, maxWidth: 900, minHeight: 520, alignment: .top)
         .onAppear {
             permissionsManager.refreshCalendarStatus()
+            if permissionsManager.isCalendarAuthorized {
+                Task {
+                    await loadEvents()
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .calendarGoToToday)) { _ in
+            selectedView = .day
+            anchorDate = Date()
             if permissionsManager.isCalendarAuthorized {
                 Task {
                     await loadEvents()
@@ -661,10 +671,12 @@ private struct AddEventSheet: View {
 }
 
 #Preview {
-    CalendarView(
-        calendarManager: CalendarManager(permissionsManager: .shared),
-        permissionsManager: .shared,
-        todoStore: TodoStore()
-    )
-    .frame(width: 700, height: 600)
+    MainActor.assumeIsolated {
+        CalendarView(
+            calendarManager: CalendarManager(permissionsManager: .shared),
+            permissionsManager: .shared,
+            todoStore: TodoStore()
+        )
+        .frame(width: 700, height: 600)
+    }
 }

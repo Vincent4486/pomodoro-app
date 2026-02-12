@@ -3,6 +3,7 @@ import AppKit
 
 /// Todo/Tasks view - always accessible with optional Reminders sync.
 /// Shows non-blocking banner when Reminders is unauthorized.
+@MainActor
 struct TodoListView: View {
     @ObservedObject var todoStore: TodoStore
     @ObservedObject var planningStore: PlanningStore
@@ -179,6 +180,9 @@ struct TodoListView: View {
             if !UserDefaults.standard.bool(forKey: Self.taskHintDefaultsKey) {
                 showTaskHint = true
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openNewTaskComposer)) { _ in
+            openEditorForNew()
         }
     }
     
@@ -934,17 +938,19 @@ extension TodoListView {
 }
 
 #Preview {
-    let store = TodoStore()
-    let planningStore = PlanningStore()
-    store.attachPlanningStore(planningStore)
-    let sync = RemindersSync(permissionsManager: .shared)
-    sync.setTodoStore(store)
-    
-    return TodoListView(
-        todoStore: store,
-        planningStore: planningStore,
-        remindersSync: sync,
-        permissionsManager: .shared
-    )
-    .frame(width: 700, height: 600)
+    MainActor.assumeIsolated {
+        let store = TodoStore()
+        let planningStore = PlanningStore()
+        store.attachPlanningStore(planningStore)
+        let sync = RemindersSync(permissionsManager: .shared)
+        sync.setTodoStore(store)
+
+        return TodoListView(
+            todoStore: store,
+            planningStore: planningStore,
+            remindersSync: sync,
+            permissionsManager: .shared
+        )
+        .frame(width: 700, height: 600)
+    }
 }

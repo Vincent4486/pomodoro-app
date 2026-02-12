@@ -2,6 +2,8 @@ import AppKit
 import Combine
 
 final class MenuBarController {
+    private static var liveStatusItem: NSStatusItem?
+
     private let appState: AppState
     private let statusItem: NSStatusItem
     private let openMainWindow: () -> Void
@@ -12,9 +14,21 @@ final class MenuBarController {
         self.appState = appState
         self.openMainWindow = openMainWindow
         self.quit = quit
+        if let existingItem = Self.liveStatusItem {
+            NSStatusBar.system.removeStatusItem(existingItem)
+            Self.liveStatusItem = nil
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        Self.liveStatusItem = statusItem
         observeAppState()
         configureStatusItem()
+    }
+
+    deinit {
+        NSStatusBar.system.removeStatusItem(statusItem)
+        if let liveItem = Self.liveStatusItem, liveItem === statusItem {
+            Self.liveStatusItem = nil
+        }
     }
 
     private func observeAppState() {
@@ -53,6 +67,8 @@ final class MenuBarController {
 
     private func updateStatusItemTitle() {
         guard let button = statusItem.button else { return }
+        button.image = nil
+        button.imagePosition = .noImage
         let modeName = appState.currentMode.displayName
         button.title = appState.currentMode == .idle ? "Pomodoro" : "Pomodoro • \(modeName)"
     }

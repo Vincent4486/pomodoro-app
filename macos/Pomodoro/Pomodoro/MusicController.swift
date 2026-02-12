@@ -283,35 +283,23 @@ final class AudioSourceStore: ObservableObject {
         musicController.$playbackState
             .combineLatest(musicController.$currentFocusSound)
             .sink { [weak self] _, _ in
-                self?.recomputeAudioSource()
+                self?.scheduleStateSync()
             }
             .store(in: &cancellables)
 
         externalMonitor.$media
             .sink { [weak self] _ in
-                self?.recomputeAudioSource()
+                self?.scheduleStateSync()
             }
             .store(in: &cancellables)
 
         externalMonitor.$playbackState
             .sink { [weak self] _ in
-                self?.recomputeAudioSource()
+                self?.scheduleStateSync()
             }
             .store(in: &cancellables)
 
-        externalMonitor.$externalMediaDetected
-            .sink { [weak self] detected in
-                self?.externalMediaDetected = detected
-            }
-            .store(in: &cancellables)
-
-        externalMonitor.$media
-            .sink { [weak self] media in
-                self?.externalMediaMetadata = media
-            }
-            .store(in: &cancellables)
-
-        recomputeAudioSource()
+        scheduleStateSync()
     }
 
     // MARK: - Public controls
@@ -352,19 +340,69 @@ final class AudioSourceStore: ObservableObject {
         }
     }
 
-    private func recomputeAudioSource() {
+    private func scheduleStateSync() {
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.syncStateFromSources()
+        }
+    }
+
+    private func syncStateFromSources() {
+        let nextExternalDetected = externalMonitor.externalMediaDetected
+        let nextExternalMedia = externalMonitor.media
+
+        let nextSource: AudioSource
         if externalMonitor.playbackState == .playing, let media = externalMonitor.media {
             if musicController.playbackState == .playing {
-                musicController.pause() // avoid mixing ambient with external playback
+                Task { @MainActor [weak self] in
+                    await Task.yield()
+                    self?.musicController.pause()
+                }
             }
-            audioSource = .external(media)
-            return
+            nextSource = .external(media)
+        } else if musicController.currentFocusSound != .off {
+            nextSource = .ambient(type: musicController.currentFocusSound)
+        } else {
+            nextSource = .off
         }
 
-        if musicController.currentFocusSound != .off {
-            audioSource = .ambient(type: musicController.currentFocusSound)
-        } else {
-            audioSource = .off
+        if externalMediaDetected != nextExternalDetected {
+            externalMediaDetected = nextExternalDetected
+        }
+
+        if !mediaEquals(externalMediaMetadata, nextExternalMedia) {
+            externalMediaMetadata = nextExternalMedia
+        }
+
+        if !audioSourceEquals(audioSource, nextSource) {
+            audioSource = nextSource
+        }
+    }
+
+    private func mediaEquals(_ lhs: ExternalMedia?, _ rhs: ExternalMedia?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return true
+        case let (left?, right?):
+            return left.title == right.title
+                && left.artist == right.artist
+                && left.album == right.album
+                && left.source == right.source
+        default:
+            return false
+        }
+    }
+
+    private func audioSourceEquals(_ lhs: AudioSource, _ rhs: AudioSource) -> Bool {
+        switch (lhs, rhs) {
+        case (.off, .off):
+            return true
+        case let (.ambient(leftType), .ambient(rightType)):
+            return leftType == rightType
+        case let (.external(leftMedia), .external(rightMedia)):
+            return mediaEquals(leftMedia, rightMedia)
+        default:
+            return false
         }
     }
 }

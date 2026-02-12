@@ -28,6 +28,7 @@ struct WindowBackgroundConfigurator: NSViewRepresentable {
 
         func applyWindowStyling() {
             guard let window else { return }
+            window.identifier = .pomodoroMainWindow
             window.applyPomodoroWindowChrome()
         }
     }
@@ -36,9 +37,7 @@ struct WindowBackgroundConfigurator: NSViewRepresentable {
         HostingView()
     }
 
-    func updateNSView(_ nsView: HostingView, context: Context) {
-        nsView.applyWindowStyling()
-    }
+    func updateNSView(_ nsView: HostingView, context: Context) {}
 }
 
 extension NSWindow {
@@ -48,39 +47,27 @@ extension NSWindow {
     /// - Preserves drag gestures on the window background
     /// - Keeps the header visually invisible
     func applyPomodoroWindowChrome() {
-        // Enable wallpaper blur support
+        guard level == .normal else { return }
+
+        // Enable transparent window compositing so the content can fill the titlebar area.
         isOpaque = false
         backgroundColor = .clear
 
-        // Hide the textual title while keeping the chrome area
+        // Keep native controls while hiding title text and making the titlebar transparent.
         title = ""
         titleVisibility = .hidden
-        // Let AppKit draw its native titlebar material; keep it transparent so our blur can show through.
         titlebarAppearsTransparent = true
         titlebarSeparatorStyle = .none
-        styleMask.formUnion([.titled, .fullSizeContentView, .closable, .miniaturizable, .resizable])
+        styleMask.insert(.titled)
+        styleMask.insert(.fullSizeContentView)
+        styleMask.insert(.closable)
+        styleMask.insert(.miniaturizable)
+        styleMask.insert(.resizable)
         toolbarStyle = .unified
         isMovableByWindowBackground = true
-
-        showTrafficLights()
     }
+}
 
-    private func showTrafficLights() {
-        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-
-        // Make sure the titlebar container stays visible even though the chrome is hidden
-        if let titlebarView = standardWindowButton(.closeButton)?.superview {
-            titlebarView.isHidden = false
-            titlebarView.alphaValue = 1
-            titlebarView.superview?.isHidden = false
-            titlebarView.superview?.alphaValue = 1
-        }
-
-        buttons.forEach { type in
-            guard let button = standardWindowButton(type) else { return }
-            button.isHidden = false
-            button.isEnabled = true
-            button.superview?.isHidden = false
-        }
-    }
+extension NSUserInterfaceItemIdentifier {
+    static let pomodoroMainWindow = NSUserInterfaceItemIdentifier("PomodoroMainWindow")
 }

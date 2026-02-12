@@ -8,6 +8,7 @@
 import SwiftUI
 import Foundation
 
+@MainActor
 struct ContentView: View {
     @EnvironmentObject private var onboardingState: OnboardingState
 
@@ -54,22 +55,22 @@ struct PremiumButton: View {
 
 #if DEBUG && PREVIEWS_ENABLED
 #Preview {
-    let appState = AppState()
-    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
-    let audioSourceStore = MainActor.assumeIsolated {
+    MainActor.assumeIsolated {
+        let appState = AppState()
+        let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
         let externalMonitor = ExternalAudioMonitor()
         let externalController = ExternalPlaybackController()
-        AudioSourceStore(
+        let audioSourceStore = AudioSourceStore(
             musicController: musicController,
             externalMonitor: externalMonitor,
             externalController: externalController
         )
+        return ContentView()
+            .environmentObject(appState)
+            .environmentObject(musicController)
+            .environmentObject(audioSourceStore)
+            .environmentObject(OnboardingState())
+            .environmentObject(AuthViewModel.shared)
     }
-    ContentView()
-        .environmentObject(appState)
-        .environmentObject(musicController)
-        .environmentObject(audioSourceStore)
-        .environmentObject(OnboardingState())
-        .environmentObject(AuthViewModel.shared)
 }
 #endif

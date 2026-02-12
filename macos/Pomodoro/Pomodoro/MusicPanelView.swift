@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@MainActor
 struct MusicPanelView: View {
     @EnvironmentObject private var localMusicPlayer: LocalMusicPlayer
     @EnvironmentObject private var localizationManager: LocalizationManager
@@ -57,7 +58,9 @@ struct MusicPanelView: View {
 
 #if DEBUG && PREVIEWS_ENABLED
 #Preview {
-    MusicPanelView()
-        .environmentObject(LocalMusicPlayer())
+    MainActor.assumeIsolated {
+        MusicPanelView()
+            .environmentObject(LocalMusicPlayer())
+    }
 }
 #endif

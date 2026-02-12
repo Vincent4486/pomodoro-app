@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@MainActor
 struct MediaControlBar: View {
     @EnvironmentObject private var audioSourceStore: AudioSourceStore
     @EnvironmentObject private var localizationManager: LocalizationManager
@@ -91,19 +92,19 @@ struct MediaControlBar: View {
 
 #if DEBUG && PREVIEWS_ENABLED
 #Preview {
-    let appState = AppState()
-    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
-    let audioSourceStore = MainActor.assumeIsolated {
+    MainActor.assumeIsolated {
+        let appState = AppState()
+        let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
         let externalMonitor = ExternalAudioMonitor()
         let externalController = ExternalPlaybackController()
-        AudioSourceStore(
+        let audioSourceStore = AudioSourceStore(
             musicController: musicController,
             externalMonitor: externalMonitor,
             externalController: externalController
         )
+        return MediaControlBar()
+            .environmentObject(audioSourceStore)
+            .padding()
     }
-    MediaControlBar()
-        .environmentObject(audioSourceStore)
-        .padding()
 }
 #endif

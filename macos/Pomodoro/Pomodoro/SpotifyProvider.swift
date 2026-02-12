@@ -14,7 +14,7 @@ final class SpotifyProvider: NowPlayingProvider {
     private var cachedArtwork: NSImage?
 
     func fetchState() async -> NowPlayingProviderState {
-        guard isSpotifyInstalled() else {
+        guard await isSpotifyInstalled() else {
             return NowPlayingProviderState(isRunning: false, isPlaying: false, title: "", artist: "", artwork: nil)
         }
 
@@ -82,8 +82,10 @@ final class SpotifyProvider: NowPlayingProvider {
         _ = await AppleScriptRunner.run(script)
     }
 
-    private func isSpotifyInstalled() -> Bool {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") != nil
+    private func isSpotifyInstalled() async -> Bool {
+        await MainActor.run {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") != nil
+        }
     }
 
     private func resolveArtwork(urlString: String) async -> NSImage? {

@@ -70,7 +70,6 @@ final class AppState: ObservableObject {
     private var currentBreakDurationSeconds: Int?
     private var hasRequestedNotificationAuthorization: Bool = false
     private let eventStore = EKEventStore()
-    private let sessionRecordStore = SessionRecordStore.shared
 
     // Designated initializer - no default arguments to avoid linker symbol issues
     @MainActor
@@ -667,13 +666,29 @@ final class AppState: ObservableObject {
             stats.logFocusSession(durationSeconds: durationSeconds)
         }
         // Local-only session record to power insights; no server or cloud dependency.
-        sessionRecordStore.appendRecord(startTime: startTime, endTime: endTime, durationSeconds: durationSeconds, taskId: nil)
+        appendSessionRecord(startTime: startTime, endTime: endTime, durationSeconds: durationSeconds, taskId: nil)
     }
 
     private func logBreakSessionIfNeeded() {
         guard let durationSeconds = currentBreakDurationSeconds else { return }
         updateDailyStats { stats in
             stats.logBreakSession(durationSeconds: durationSeconds)
+        }
+    }
+
+    private func appendSessionRecord(
+        startTime: Date,
+        endTime: Date,
+        durationSeconds: Int,
+        taskId: UUID?
+    ) {
+        Task { @MainActor in
+            SessionRecordStore.shared.appendRecord(
+                startTime: startTime,
+                endTime: endTime,
+                durationSeconds: durationSeconds,
+                taskId: taskId
+            )
         }
     }
 

@@ -3,6 +3,7 @@ import EventKit
 
 /// Settings view with centralized permission overview.
 /// Shows status and enable buttons for Notifications, Calendar, and Reminders.
+@MainActor
 struct SettingsPermissionsView: View {
     @ObservedObject var permissionsManager: PermissionsManager
     @EnvironmentObject private var localizationManager: LocalizationManager
@@ -164,7 +165,9 @@ struct SettingsPermissionsView: View {
 }
 
 #Preview {
-    SettingsPermissionsView(permissionsManager: .shared)
-        .frame(width: 600, height: 400)
-        .environmentObject(AuthViewModel.shared)
+    MainActor.assumeIsolated {
+        SettingsPermissionsView(permissionsManager: .shared)
+            .frame(width: 600, height: 400)
+            .environmentObject(AuthViewModel.shared)
+    }
 }

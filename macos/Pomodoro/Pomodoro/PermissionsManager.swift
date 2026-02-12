@@ -25,7 +25,10 @@ final class PermissionsManager: ObservableObject {
     private let notificationCenter = UNUserNotificationCenter.current()
     
     private init() {
-        refreshAllStatuses()
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.refreshAllStatuses()
+        }
     }
     
     // MARK: - Status Refresh
@@ -41,15 +44,15 @@ final class PermissionsManager: ObservableObject {
     
     func refreshNotificationStatus() async {
         let settings = await notificationCenter.notificationSettings()
-        notificationStatus = settings.authorizationStatus
+        updateNotificationStatus(settings.authorizationStatus)
     }
     
     func refreshCalendarStatus() {
-        calendarStatus = EKEventStore.authorizationStatus(for: .event)
+        updateCalendarStatus(EKEventStore.authorizationStatus(for: .event))
     }
     
     func refreshRemindersStatus() {
-        remindersStatus = EKEventStore.authorizationStatus(for: .reminder)
+        updateRemindersStatus(EKEventStore.authorizationStatus(for: .reminder))
     }
     
     // MARK: - Permission Requests
@@ -57,14 +60,16 @@ final class PermissionsManager: ObservableObject {
     /// Request notification permission - shows system dialog if notDetermined, alert if denied/restricted
     func requestNotificationPermission() async {
         // Check current status
-        await refreshNotificationStatus()
+        let status = await notificationCenter.notificationSettings().authorizationStatus
+        updateNotificationStatus(status)
         
-        switch notificationStatus {
+        switch status {
         case .notDetermined:
             // Request permission - this will show the system dialog
             do {
                 let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
-                await refreshNotificationStatus()
+                let updatedStatus = await notificationCenter.notificationSettings().authorizationStatus
+                updateNotificationStatus(updatedStatus)
                 
                 if !granted {
                     // User denied in the dialog - no additional action needed
@@ -92,13 +97,14 @@ final class PermissionsManager: ObservableObject {
     /// Request calendar permission - shows system dialog if notDetermined, sets alert flag if denied/restricted
     func requestCalendarPermission() async {
         // Check current status
-        refreshCalendarStatus()
+        let status = EKEventStore.authorizationStatus(for: .event)
+        updateCalendarStatus(status)
 
         if #available(macOS 14.0, *) {
-            switch calendarStatus {
+            switch status {
             case .notDetermined:
                 let granted = await requestCalendarAccess()
-                refreshCalendarStatus()
+                updateCalendarStatus(EKEventStore.authorizationStatus(for: .event))
                 if !granted { showCalendarDeniedAlert = true }
             case .denied, .restricted:
                 showCalendarDeniedAlert = true
@@ -108,10 +114,10 @@ final class PermissionsManager: ObservableObject {
                 break
             }
         } else {
-            switch calendarStatus {
+            switch status {
             case .notDetermined:
                 let granted = await requestCalendarAccess()
-                refreshCalendarStatus()
+                updateCalendarStatus(EKEventStore.authorizationStatus(for: .event))
                 if !granted { showCalendarDeniedAlert = true }
             case .denied, .restricted:
                 showCalendarDeniedAlert = true
@@ -126,13 +132,14 @@ final class PermissionsManager: ObservableObject {
     /// Request reminders permission - shows system dialog if notDetermined, sets alert flag if denied/restricted
     func requestRemindersPermission() async {
         // Check current status
-        refreshRemindersStatus()
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        updateRemindersStatus(status)
 
         if #available(macOS 14.0, *) {
-            switch remindersStatus {
+            switch status {
             case .notDetermined:
                 let granted = await requestRemindersAccess()
-                refreshRemindersStatus()
+                updateRemindersStatus(EKEventStore.authorizationStatus(for: .reminder))
                 if !granted { showRemindersDeniedAlert = true }
             case .denied, .restricted:
                 showRemindersDeniedAlert = true
@@ -142,10 +149,10 @@ final class PermissionsManager: ObservableObject {
                 break
             }
         } else {
-            switch remindersStatus {
+            switch status {
             case .notDetermined:
                 let granted = await requestRemindersAccess()
-                refreshRemindersStatus()
+                updateRemindersStatus(EKEventStore.authorizationStatus(for: .reminder))
                 if !granted { showRemindersDeniedAlert = true }
             case .denied, .restricted:
                 showRemindersDeniedAlert = true
@@ -221,6 +228,33 @@ final class PermissionsManager: ObservableObject {
                     continuation.resume(returning: granted)
                 }
             }
+        }
+    }
+
+    private func updateNotificationStatus(_ status: UNAuthorizationStatus) {
+        guard notificationStatus != status else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, self.notificationStatus != status else { return }
+            self.notificationStatus = status
+        }
+    }
+
+    private func updateCalendarStatus(_ status: EKAuthorizationStatus) {
+        guard calendarStatus != status else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, self.calendarStatus != status else { return }
+            self.calendarStatus = status
+        }
+    }
+
+    private func updateRemindersStatus(_ status: EKAuthorizationStatus) {
+        guard remindersStatus != status else { return }
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, self.remindersStatus != status else { return }
+            self.remindersStatus = status
         }
     }
     

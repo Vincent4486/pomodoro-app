@@ -60,7 +60,8 @@ final class AuthViewModel: ObservableObject {
 
     private func listen(using auth: Auth) {
         authStateListener = auth.addStateDidChangeListener { [weak self] _, user in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
+                await Task.yield()
                 self?.currentUser = user
             }
         }

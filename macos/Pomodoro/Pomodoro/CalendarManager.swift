@@ -167,11 +167,11 @@ final class CalendarManager: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .notAuthorized:
-                return LocalizationManager.shared.text("calendar.error.not_authorized")
+                return NSLocalizedString("calendar.error.not_authorized", comment: "Calendar permission is missing")
             case .failedToCreate:
-                return LocalizationManager.shared.text("calendar.error.create_failed")
+                return NSLocalizedString("calendar.error.create_failed", comment: "Calendar event could not be created")
             case .notEditable:
-                return LocalizationManager.shared.text("calendar.error.not_editable")
+                return NSLocalizedString("calendar.error.not_editable", comment: "Calendar event cannot be edited")
             }
         }
     }

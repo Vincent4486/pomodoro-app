@@ -3,6 +3,7 @@ import Combine
 
 /// Flow Mode: a low-density state with a single focus surface (clock) and a clear exit.
 /// UI-only: no settings or persistence changes.
+@MainActor
 struct FlowModeView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var localizationManager: LocalizationManager
@@ -561,19 +562,19 @@ private struct AmbientAudioStrip: View {
 }
 
 #Preview {
-    let appState = AppState()
-    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
-    let audioSourceStore: AudioSourceStore = MainActor.assumeIsolated {
+    MainActor.assumeIsolated {
+        let appState = AppState()
+        let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
         let externalMonitor = ExternalAudioMonitor()
         let externalController = ExternalPlaybackController()
-        return AudioSourceStore(
+        let audioSourceStore = AudioSourceStore(
             musicController: musicController,
             externalMonitor: externalMonitor,
             externalController: externalController
         )
+        return FlowModeView()
+            .environmentObject(appState)
+            .environmentObject(musicController)
+            .environmentObject(audioSourceStore)
     }
-    FlowModeView()
-        .environmentObject(appState)
-        .environmentObject(musicController)
-        .environmentObject(audioSourceStore)
 }

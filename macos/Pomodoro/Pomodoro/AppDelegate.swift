@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var mainWindow: NSWindow?
     private var appStateConfigured = false
     private var menuBarController: MenuBarController?
-    private let mainWindowFrameAutosaveName = "PomodoroMainWindowFrame"
+    private var openMainWindowScene: (() -> Void)?
 
     var appState: AppState? {
         didSet {
@@ -45,49 +45,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureFirebase()
-        if let window = existingWindow() {
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, let window = self.existingMainWindow() else { return }
             window.applyPomodoroWindowChrome()
-            configureWindowPersistence(window)
         }
     }
 
-    func openMainWindow() {
-        guard let appState, let musicController, let audioSourceStore else { return }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            openMainWindow()
+        }
+        return true
+    }
 
-        if let window = mainWindow ?? existingWindow() {
+    func openMainWindow() {
+        if let window = mainWindow ?? existingMainWindow() {
             focus(window: window)
             return
         }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 520),
-            styleMask: [.titled, .fullSizeContentView, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = true
-        window.contentViewController = NSHostingController(
-            rootView: ContentView()
-                .environmentObject(appState)
-                .environmentObject(musicController)
-                .environmentObject(audioSourceStore)
-                .environmentObject(onboardingState ?? OnboardingState())
-                .environmentObject(authViewModel ?? AuthViewModel.shared)
-        )
-        window.applyPomodoroWindowChrome()
-        configureWindowPersistence(window)
-        window.makeKeyAndOrderFront(nil)
-        focus(window: window)
-        mainWindow = window
+        openMainWindowScene?()
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, let openedWindow = self.existingMainWindow() else { return }
+            self.focus(window: openedWindow)
+        }
     }
 
     private func quitApp() {
         NSApplication.shared.terminate(nil)
     }
 
-    private func existingWindow() -> NSWindow? {
-        let window = NSApplication.shared.windows.first { window in
-            window.isVisible || window.isMiniaturized
+    private func existingMainWindow() -> NSWindow? {
+        let windows = NSApplication.shared.windows
+        let identifiedWindow = windows.first { window in
+            window.identifier == .pomodoroMainWindow
+        }
+        let window = identifiedWindow ?? windows.first { window in
+            window.styleMask.contains(.titled)
+                && window.level == .normal
+                && window.canBecomeMain
+                && !window.isExcludedFromWindowsMenu
         }
         if let window {
             mainWindow = window
@@ -100,18 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }
+        window.applyPomodoroWindowChrome()
         window.makeKeyAndOrderFront(nil)
-    }
-
-    private func configureWindowPersistence(_ window: NSWindow) {
-        configureWindowPersistence(window, autosaveName: mainWindowFrameAutosaveName)
-    }
-
-    private func configureWindowPersistence(_ window: NSWindow, autosaveName: String) {
-        window.setFrameAutosaveName(autosaveName)
-        if !window.setFrameUsingName(autosaveName) {
-            window.center()
-        }
     }
 
     private func configureControllersIfNeeded() {
@@ -143,5 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         print("[Firebase] projectID: \(String(describing: FirebaseApp.app()?.options.projectID))")
         print("[Firebase] googleAppID: \(String(describing: FirebaseApp.app()?.options.googleAppID))")
         AuthViewModel.shared.startListeningIfNeeded()
+    }
+
+    func registerMainWindowSceneOpener(_ opener: @escaping () -> Void) {
+        openMainWindowScene = opener
     }
 }

@@ -11,6 +11,7 @@ import SwiftUI
 import UserNotifications
 import Charts
 
+@MainActor
 struct MainWindowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var musicController: MusicController
@@ -100,6 +101,16 @@ struct MainWindowView: View {
             .onReceive(NotificationCenter.default.publisher(for: .navigateToFlow)) { _ in
                 withAnimation {
                     sidebarSelection = .flow
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToPomodoro)) { _ in
+                withAnimation {
+                    sidebarSelection = .pomodoro
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToCountdown)) { _ in
+                withAnimation {
+                    sidebarSelection = .countdown
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToTasks)) { _ in
@@ -483,10 +494,12 @@ struct MainWindowView: View {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             if settings.authorizationStatus == .notDetermined {
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
-                    refreshPermissionStatuses()
+                    Task { @MainActor in
+                        refreshPermissionStatuses()
+                    }
                 }
             }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 openNotificationSettings()
             }
         }
@@ -570,7 +583,6 @@ struct MainWindowView: View {
                             }
                     }
                     .frame(width: 200)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
             case .ambient(let type):
@@ -630,7 +642,6 @@ struct MainWindowView: View {
                         }
                     }
                     .frame(width: 200)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
             case .off:
@@ -1529,27 +1540,31 @@ private struct SettingsSectionCard<Content: View>: View {
 
 // MARK: - Menu bar navigation hooks
 extension Notification.Name {
+    static let navigateToPomodoro = Notification.Name("navigateToPomodoro")
     static let navigateToFlow = Notification.Name("navigateToFlow")
+    static let navigateToCountdown = Notification.Name("navigateToCountdown")
     static let navigateToTasks = Notification.Name("navigateToTasks")
     static let navigateToCalendar = Notification.Name("navigateToCalendar")
+    static let openNewTaskComposer = Notification.Name("openNewTaskComposer")
+    static let calendarGoToToday = Notification.Name("calendarGoToToday")
 }
 
 #if DEBUG && PREVIEWS_ENABLED
 #Preview {
-    let appState = AppState()
-    let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
-    let audioSourceStore = MainActor.assumeIsolated {
+    MainActor.assumeIsolated {
+        let appState = AppState()
+        let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
         let externalMonitor = ExternalAudioMonitor()
         let externalController = ExternalPlaybackController()
-        AudioSourceStore(
+        let audioSourceStore = AudioSourceStore(
             musicController: musicController,
             externalMonitor: externalMonitor,
             externalController: externalController
         )
+        return MainWindowView()
+            .environmentObject(appState)
+            .environmentObject(musicController)
+            .environmentObject(audioSourceStore)
     }
-    MainWindowView()
-        .environmentObject(appState)
-        .environmentObject(musicController)
-        .environmentObject(audioSourceStore)
 }
 #endif

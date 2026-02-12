@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
+@MainActor
 struct OnboardingFlowView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var onboardingState: OnboardingState

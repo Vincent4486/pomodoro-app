@@ -11,6 +11,8 @@ import FirebaseCore
 @MainActor
 @main
 struct PomodoroApp: App {
+    static let mainWindowID = "main-window"
+
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appState: AppState
     @StateObject private var musicController: MusicController
@@ -43,30 +45,102 @@ struct PomodoroApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Pomodoro", id: Self.mainWindowID) {
             rootContentView
         }
         .commands {
-            CommandMenu(languageManager.text("menu.timer")) {
-                Button(languageManager.text("menu.start_pause_pomodoro")) {
-                    // Spacebar should be inert while in Flow Mode to keep the focus surface passive.
-                    guard !appState.isInFlowMode else { return }
-                    appState.startOrPausePomodoro()
+            CommandMenu("Timer") {
+                Button("Start Session") {
+                    startSession()
                 }
                 .keyboardShortcut(.space, modifiers: [])
 
-                Button(languageManager.text("menu.reset_pomodoro")) {
+                Button("Pause Session") {
+                    pauseSession()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                Button("Reset Session") {
                     appState.resetPomodoro()
                 }
                 .keyboardShortcut("r", modifiers: [])
 
                 Divider()
 
-                Button(languageManager.text("menu.start_countdown")) {
-                    appState.startCountdown()
+                Button("Skip Break") {
+                    appState.skipBreak()
                 }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(appState.countdown.state != .idle)
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+            }
+
+            CommandMenu("Tasks") {
+                Button("New Task") {
+                    openNewTaskComposer()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                Button("Open Task List") {
+                    navigateTo(.navigateToTasks)
+                }
+                .keyboardShortcut("0", modifiers: [.command, .shift])
+            }
+
+            CommandMenu("Calendar") {
+                Button("Open Calendar") {
+                    navigateTo(.navigateToCalendar)
+                }
+                .keyboardShortcut("4", modifiers: [.command, .shift])
+
+                Button("Today View") {
+                    openCalendarToday()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .option])
+            }
+
+            CommandMenu("Audio") {
+                Button("White Noise") {
+                    audioSourceStore.selectAmbient(.white)
+                }
+                Button("Brown Noise") {
+                    audioSourceStore.selectAmbient(.brown)
+                }
+                Button("Rain") {
+                    audioSourceStore.selectAmbient(.rain)
+                }
+                Button("Wind") {
+                    audioSourceStore.selectAmbient(.wind)
+                }
+                Menu("Volume") {
+                    Button("Mute") { audioSourceStore.setVolume(0.0) }
+                    Button("25%") { audioSourceStore.setVolume(0.25) }
+                    Button("50%") { audioSourceStore.setVolume(0.5) }
+                    Button("75%") { audioSourceStore.setVolume(0.75) }
+                    Button("100%") { audioSourceStore.setVolume(1.0) }
+                }
+            }
+
+            CommandGroup(after: .newItem) {
+                Button("New Task") {
+                    openNewTaskComposer()
+                }
+            }
+
+            CommandGroup(after: .toolbar) {
+                Divider()
+                Button("Show Pomodoro") {
+                    navigateTo(.navigateToPomodoro)
+                }
+                .keyboardShortcut("1", modifiers: [.command, .option])
+
+                Button("Show Flow Mode") {
+                    navigateTo(.navigateToFlow)
+                }
+                .keyboardShortcut("2", modifiers: [.command, .option])
+
+                Button("Show Countdown Mode") {
+                    navigateTo(.navigateToCountdown)
+                }
+                .keyboardShortcut("3", modifiers: [.command, .option])
             }
         }
     }
@@ -80,6 +154,9 @@ struct PomodoroApp: App {
             .environmentObject(onboardingState)
             .environmentObject(authViewModel)
             .environmentObject(languageManager)
+            .background(MainWindowSceneOpenerBridge(onRegister: { action in
+                appDelegate.registerMainWindowSceneOpener(action)
+            }))
             .id(languageManager.currentLanguage.rawValue)
             .task(id: ObjectIdentifier(appState)) {
                 appDelegate.appState = appState
@@ -90,5 +167,58 @@ struct PomodoroApp: App {
             }
 
         content.environment(\.locale, languageManager.effectiveLocale)
+    }
+
+    private struct MainWindowSceneOpenerBridge: View {
+        @Environment(\.openWindow) private var openWindow
+        let onRegister: (@escaping () -> Void) -> Void
+
+        var body: some View {
+            Color.clear
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+                .onAppear {
+                    onRegister {
+                        openWindow(id: PomodoroApp.mainWindowID)
+                    }
+                }
+        }
+    }
+
+    private func startSession() {
+        // Spacebar should be inert while in Flow Mode to keep the focus surface passive.
+        guard !appState.isInFlowMode else { return }
+        switch appState.pomodoro.state {
+        case .idle:
+            appState.startPomodoro()
+        case .paused, .breakPaused:
+            appState.togglePomodoroPause()
+        case .running, .breakRunning:
+            break
+        }
+    }
+
+    private func pauseSession() {
+        switch appState.pomodoro.state {
+        case .running, .breakRunning:
+            appState.togglePomodoroPause()
+        case .idle, .paused, .breakPaused:
+            break
+        }
+    }
+
+    private func openNewTaskComposer() {
+        navigateTo(.navigateToTasks)
+        NotificationCenter.default.post(name: .openNewTaskComposer, object: nil)
+    }
+
+    private func openCalendarToday() {
+        navigateTo(.navigateToCalendar)
+        NotificationCenter.default.post(name: .calendarGoToToday, object: nil)
+    }
+
+    private func navigateTo(_ notification: Notification.Name) {
+        appDelegate.openMainWindow()
+        NotificationCenter.default.post(name: notification, object: nil)
     }
 }

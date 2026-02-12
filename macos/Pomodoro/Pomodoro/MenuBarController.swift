@@ -8,7 +8,10 @@
 import AppKit
 import Combine
 
+@MainActor
 final class MenuBarController: NSObject, NSMenuDelegate {
+    private static var liveStatusItem: NSStatusItem?
+
     private enum MenuMode {
         case pomodoro
         case breakTime
@@ -60,7 +63,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         self.musicController = musicController
         self.openMainWindow = openMainWindow
         self.quitHandler = quitApp
+        if let existingItem = Self.liveStatusItem {
+            NSStatusBar.system.removeStatusItem(existingItem)
+            Self.liveStatusItem = nil
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        Self.liveStatusItem = statusItem
         menu = NSMenu()
         menu.autoenablesItems = false
         super.init()
@@ -70,11 +78,21 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     deinit {
-        shutdown()
+        MainActor.assumeIsolated {
+            titleTimer?.invalidate()
+            titleTimer = nil
+            cancellables.removeAll()
+            NSStatusBar.system.removeStatusItem(statusItem)
+            if let liveItem = Self.liveStatusItem, liveItem === statusItem {
+                Self.liveStatusItem = nil
+            }
+        }
     }
 
     private func configureStatusItem() {
         if let button = statusItem.button {
+            button.image = nil
+            button.imagePosition = .noImage
             button.attributedTitle = statusTitleAttributedString()
         }
         updateStatusItemLength()
@@ -145,7 +163,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let nextSecond = ceil(Date().timeIntervalSince1970)
         let fireDate = Date(timeIntervalSince1970: nextSecond)
         let timer = Timer(fire: fireDate, interval: 1.0, repeats: true) { [weak self] _ in
-            self?.updateTitleIfNeeded()
+            MainActor.assumeIsolated {
+                self?.updateTitleIfNeeded()
+            }
         }
         timer.tolerance = 0.05
         RunLoop.main.add(timer, forMode: .common)
@@ -159,6 +179,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
         lastTitleUpdateSecond = currentSecond
         guard let button = statusItem.button else { return }
+        button.image = nil
+        button.imagePosition = .noImage
         button.attributedTitle = statusTitleAttributedString()
         button.toolTip = statusTooltip()
     }
@@ -218,19 +240,20 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let pomodoroState = appState.pomodoro.state
         let countdownState = appState.countdown.state
 
+        // Countdown has higher display priority than Pomodoro.
+        switch countdownState {
+        case .running, .paused:
+            return .countdown
+        case .idle, .breakRunning, .breakPaused:
+            break
+        }
+
         switch pomodoroState {
         case .running, .paused:
             return .pomodoro
         case .breakRunning, .breakPaused:
             return .breakTime
         case .idle:
-            break
-        }
-
-        switch countdownState {
-        case .running, .paused:
-            return .countdown
-        case .idle, .breakRunning, .breakPaused:
             return .idle
         }
     }
@@ -534,5 +557,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         titleTimer = nil
         cancellables.removeAll()
         NSStatusBar.system.removeStatusItem(statusItem)
+        if let liveItem = Self.liveStatusItem, liveItem === statusItem {
+            Self.liveStatusItem = nil
+        }
     }
 }

@@ -108,48 +108,30 @@ The current version is fully native Swift; legacy Tauri/Svelte/Python versions a
 >See Example:
 >`GoogleService-Info.plist.sample`
 
-## Version status
+## Version status/Release Notes
 
-Current Version: <br>
-✅ 1.5.0
+For full details on updates, see the release notes on **TestFlight** or **App Store**.
 
-Update history: see `History versions.md` for archived notes.
+👉 TestFlight & App Store release notes are the new source for version changes and updates.
 
 ### 📌 Update Policy
 - Will receive more updates
 - Changes may occur without notice
 - Feedback, PR, and issue reports are welcome
+- Will be on TestFlight or App Store
 
-## Changelog (short)
+## 🚀 Early Access Preview Available
 
-### 1.5.0
-- Add flow mode
-- UI update for music and audio panel
+Official Apple preview builds are now available via TestFlight.
 
-## 🚀 Coming next: TestFlight
+This is an **invite-only early access** — please join the waitlist to request an invite before getting access.
 
-Apple TestFlight preview builds are launching soon. <br>
-Pomodoro App is **transitioning** to Apple's distribution (TestFlight → App Store). <br>
-
-Join the waitlist:
+👉 Join the waitlist:  
 https://forms.gle/hQ7ubqxt39sXca4e9
-
-Why join TestFlight waitlist? <br>
-- Access to upcoming official builds
-- Early access to the Apple release channel
-- Smooth transition to the App Store version  
-- Help shape the future direction before public launch
 
 ## Current UI Direction
 
-The current UI uses a structured glass tile system inspired by macOS 26 (liquid glass).
-
-Version 1.1.x focuses on:
-
-- Deepening Calendar, Reminders, and Tasks integration across the UI
-- Clean up UI
-- Updating macOS 15 style to macOS 26 liquid glass.
-
+The current UI uses a structured glass tile system inspired by macOS 26 (liquid glass). <br>
 The goal of upcoming versions is to transition toward a softer, macOS-inspired liquid glass look — with more subtle contrast, improved typography, and refined panel depth.
 
 ## 🛠️ Project status
@@ -162,15 +144,15 @@ The goal of upcoming versions is to transition toward a softer, macOS-inspired l
 >
 >Pomodoro is currently under active development and not yet available on TestFlight or the Mac App Store.<br>
 >
->**🚀 Coming next: TestFlight**
+>**🚀 Preview Access Available**
 >
->Apple TestFlight preview builds are launching soon. <br>
->Pomodoro App is **transitioning** to Apple's distribution (TestFlight → App Store). <br>
+>Official Apple preview builds of Pomodoro are now available via TestFlight. <br>
+>This is an **invite-only early access program** — access is managed through a waitlist to prevent spam and ensure quality feedback.
 >
->Join the waitlist:
+>👉 Join the TestFlight waitlist:  
 >https://forms.gle/hQ7ubqxt39sXca4e9
 >
->Thank you for your patience and interest ❤️
+>Thank you for your interest and support ❤️
 
 ## 🗺️ Roadmap (Post-1.0.0)
 
@@ -182,6 +164,8 @@ Planned for future versions:
 - 🔔 Advanced reminder scheduling & customization
 - ⌨️ More features
 - 🛎️ Issue requirements
+
+See: `docs/Future_Pro_Plan.md` and `docs/Roadmap_1.0-2.0.md`
 
 ## 🤝 Collaboration & Contributions
 

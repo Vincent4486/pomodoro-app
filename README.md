@@ -4,8 +4,6 @@
 **Pomodoro App** is a macOS productivity app that connects focus sessions, Tasks, Reminders, and Calendar into a single workflow.  
 It is not just a timer — it links tasks, time, and focus, adapting to task-driven, time-blocking, or flow-based work styles. Pomodoro is built as a unified time system rather than a rigid productivity method, with a macOS-inspired **glass / liquid glass UI**.
 
-Version **1.1.0** is a feature integration update that deepens system connections without a full redesign.
-
 <p align="center">
   <img
     width="240"
@@ -26,25 +24,43 @@ Version **1.1.0** is a feature integration update that deepens system connection
 </p>
 
 >## ⚠️ Notice
-> If the app still ask for calendar&reminders permissions after you activate, please quit and restart the app
+> If the app still ask for calendar & reminders permissions after you activate, please quit and restart the app
 
 ## 🌐 Our official website
 
 Explore the project website for design philosophies, documentation, and downloads:<br>
 👉  https://pomodoro-app.tech
 
+## Screenshot
+<img width="1027" height="728" alt="Screenshot 2026-01-30 at 4 25 25 PM" src="https://github.com/user-attachments/assets/e04529ad-dacf-4675-bb06-88fdf5a2a7cf" />
+
+## 🎁 Giveaway Event
+
+We are running an early access TestFlight giveaway.
+
+👉 Full rules & participation details:  
+[View Giveaway Rules](Docs/giveaway.md)
+
+Join the waitlist to enter the draw.
+
 ## 🚀 Try it now
 
-Download the latest release from GitHub and run the app immediately: see Pomodoro v1.1.0 for the current build. Future releases will appear under Releases.
+### Early Access Preview Available
+
+Official Apple preview builds are now available via TestFlight.
+
+This is an **invite-only early access** — please join the waitlist to request an invite before getting access.
+
+👉 Join the waitlist:  
+https://forms.gle/hQ7ubqxt39sXca4e9
+
+### Previous GitHub Release
+Download the latest release from GitHub and run the app.
 
 - **Gatekeeper warning**: macOS may warn that the app is from an unidentified developer. This is expected while the project awaits Apple Developer Program approval.
 - **Bypass Gatekeeper safely**: follow the step‑by‑step guide in `docs/Gatekeeper.md` to open the downloaded app without compromising security.
 
-Once the Apple developer account is active, signed TestFlight and App Store builds will be provided.
-
-## Screenshot
-<img width="1027" height="728" alt="Screenshot 2026-01-30 at 4 25 25 PM" src="https://github.com/user-attachments/assets/e04529ad-dacf-4675-bb06-88fdf5a2a7cf" />
-
+Signed app is provided on TestFlight currently.
 
 ## ✅ Features
 
@@ -119,15 +135,6 @@ For full details on updates, see the release notes on **TestFlight** or **App St
 - Changes may occur without notice
 - Feedback, PR, and issue reports are welcome
 - Will be on TestFlight or App Store
-
-## 🚀 Early Access Preview Available
-
-Official Apple preview builds are now available via TestFlight.
-
-This is an **invite-only early access** — please join the waitlist to request an invite before getting access.
-
-👉 Join the waitlist:  
-https://forms.gle/hQ7ubqxt39sXca4e9
 
 ## Current UI Direction
 

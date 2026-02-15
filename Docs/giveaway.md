@@ -43,4 +43,10 @@ Your email will only be used for TestFlight invitations and giveaway contact; it
 
 Thank you for your interest and participation!
 
+>### ⚠️ Disclaimer
+>
+>If server activation or delivery is delayed, unavailable, or affected due to force majeure, supply issues, infrastructure limitations, or other factors beyond control, neither the organizer nor >the sponsor shall be held liable for any direct or indirect damages.
+>
+>The organizer will make reasonable efforts to coordinate resolution and support, but delivery timing and availability cannot be guaranteed.
+
 <img width="4000" height="1000" alt="sponsor" src="https://github.com/user-attachments/assets/a5d1f2fe-f676-4c7c-afd4-a20de0f7e6dc" />

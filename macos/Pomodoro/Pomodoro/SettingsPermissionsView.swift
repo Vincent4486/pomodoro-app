@@ -1,5 +1,6 @@
-import SwiftUI
 import EventKit
+import AppKit
+import SwiftUI
 
 /// Settings view with centralized permission overview.
 /// Shows status and enable buttons for Notifications, Calendar, and Reminders.
@@ -108,6 +109,32 @@ struct SettingsPermissionsView: View {
         .padding(16)
         .background(Color.primary.opacity(0.05))
         .cornerRadius(12)
+
+        Button {
+            guard let url = URL(string: "https://pomodoro-app.tech/policies.html") else {
+                return
+            }
+            NSWorkspace.shared.open(url)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.text")
+                    .foregroundStyle(.secondary)
+
+                Text("Privacy & Policies")
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Image(systemName: "arrow.up.right.square")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 42)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.05))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
     }
     
     @ViewBuilder

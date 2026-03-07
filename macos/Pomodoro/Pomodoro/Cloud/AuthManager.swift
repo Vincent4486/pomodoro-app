@@ -8,6 +8,7 @@ import ObjectiveC.runtime
 @MainActor
 final class AuthManager {
     static let shared = AuthManager()
+    private var activeOAuthProvider: OAuthProvider?
 
     private init() {}
 
@@ -69,7 +70,10 @@ final class AuthManager {
 
         let provider = OAuthProvider(providerID: "github.com")
         provider.scopes = ["user:email"]
+        activeOAuthProvider = provider
         print("[Auth] Starting GitHub OAuth")
+        print("[Auth] Configured provider: \(provider.providerID)")
+        print("[Auth] Requested scopes: \(provider.scopes?.joined(separator: ", ") ?? "none")")
 
         do {
             let credential = try await githubCredential(from: provider)
@@ -77,8 +81,10 @@ final class AuthManager {
             print("[Auth] Signing into Firebase")
             let authResult = try await signIn(with: credential)
             print("[Auth] GitHub sign-in succeeded for uid: \(authResult.user.uid)")
+            activeOAuthProvider = nil
             return authResult.user.uid
         } catch {
+            activeOAuthProvider = nil
             log(error, prefix: "[Auth] GitHub sign-in failed")
             throw error
         }
@@ -122,8 +128,9 @@ final class AuthManager {
     }
 
     private func githubCredential(from provider: OAuthProvider) async throws -> AuthCredential {
-        let selector = NSSelectorFromString("getCredentialWith:completion:")
+        let selector = NSSelectorFromString("getCredentialWithUIDelegate:completion:")
         guard let method = class_getInstanceMethod(OAuthProvider.self, selector) else {
+            print("[Auth] GitHub OAuth selector not found: \(NSStringFromSelector(selector))")
             throw AuthManagerError.missingResult
         }
 
@@ -133,6 +140,7 @@ final class AuthManager {
         let function = unsafeBitCast(implementation, to: CredentialFunction.self)
 
         return try await withCheckedThrowingContinuation { continuation in
+            print("[Auth] Requesting GitHub OAuth credential")
             let completion: CredentialBlock = { credential, error in
                 if let error {
                     print("[Auth] GitHub auth error: \((error as NSError).localizedDescription)")
@@ -144,37 +152,10 @@ final class AuthManager {
                     continuation.resume(throwing: AuthManagerError.missingResult)
                     return
                 }
+                print("[Auth] Received GitHub OAuth credential of type: \(type(of: credential))")
                 continuation.resume(returning: credential)
             }
             function(provider, selector, nil, completion)
-        }
-    }
-
-    private func signIn(with provider: OAuthProvider) async throws -> AuthDataResult {
-        let auth = Auth.auth()
-        let selector = NSSelectorFromString("signInWithProvider:UIDelegate:completion:")
-        guard let method = class_getInstanceMethod(Auth.self, selector) else {
-            throw AuthManagerError.missingResult
-        }
-
-        typealias SignInBlock = @convention(block) (AuthDataResult?, Error?) -> Void
-        typealias SignInFunction = @convention(c) (AnyObject, Selector, AnyObject, AnyObject?, SignInBlock?) -> Void
-        let implementation = method_getImplementation(method)
-        let function = unsafeBitCast(implementation, to: SignInFunction.self)
-
-        return try await withCheckedThrowingContinuation { continuation in
-            let completion: SignInBlock = { result, error in
-                if let result {
-                    continuation.resume(returning: result)
-                    return
-                }
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                continuation.resume(throwing: AuthManagerError.missingResult)
-            }
-            function(auth, selector, provider, nil, completion)
         }
     }
 

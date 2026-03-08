@@ -7,6 +7,7 @@ import SwiftUI
 @MainActor
 struct SettingsPermissionsView: View {
     @ObservedObject var permissionsManager: PermissionsManager
+    @ObservedObject private var featureGate = FeatureGate.shared
     @EnvironmentObject private var localizationManager: LocalizationManager
     @State private var showAdvancedAccountTools = false
     
@@ -70,11 +71,17 @@ struct SettingsPermissionsView: View {
             Text(localizationManager.text("permissions.note.reminders_optional"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            aiSubscriptionSection
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)
         .onAppear {
             permissionsManager.refreshAllStatuses()
+            Task { @MainActor in
+                guard !featureGate.isRefreshingAllowance else { return }
+                await featureGate.refreshAllowance()
+            }
         }
         .alert(localizationManager.text("permissions.calendar.denied_title"), isPresented: $permissionsManager.showCalendarDeniedAlert) {
             Button(localizationManager.text("common.open_settings")) {
@@ -135,6 +142,104 @@ struct SettingsPermissionsView: View {
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
+    }
+
+    private var aiSubscriptionSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(localizationManager.text("settings.ai_subscription.title"))
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 14) {
+                statusRow(
+                    label: localizationManager.text("settings.ai_subscription.current_plan"),
+                    value: currentPlanLabel
+                )
+
+                if featureGate.tier == .free {
+                    Text(localizationManager.text("settings.ai_usage.upgrade_message"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if let subscriptionEndAt = featureGate.subscriptionEndAt,
+                          featureGate.tier == .plus || featureGate.tier == .pro {
+                    statusRow(
+                        label: localizationManager.text("settings.ai_subscription.subscription_ends"),
+                        value: formattedDate(subscriptionEndAt)
+                    )
+                }
+
+                if let resetAt = featureGate.allowanceResetAt {
+                    statusRow(
+                        label: localizationManager.text("settings.ai_subscription.usage_resets"),
+                        value: formattedDate(resetAt)
+                    )
+                }
+
+                if featureGate.canUseCloudProxyAI {
+                    VStack(spacing: 14) {
+                        ForEach(featureGate.aiUsageProgressItems, id: \.title) { item in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.medium))
+
+                                ProgressView(value: item.usedRatio)
+                                    .tint(usageColor(for: item.usedRatio))
+
+                                Text(localizationManager.format("settings.ai_usage.used_percentage", item.usedPercentage))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.primary.opacity(0.05))
+        .cornerRadius(12)
+    }
+
+    private func usageColor(for ratio: Double) -> Color {
+        switch ratio {
+        case ..<0.6:
+            return .accentColor
+        case ..<0.8:
+            return .yellow
+        default:
+            return .red
+        }
+    }
+
+    private var currentPlanLabel: String {
+        switch featureGate.tier {
+        case .free:
+            return localizationManager.text("settings.ai_subscription.plan.free")
+        case .plus:
+            return localizationManager.text("settings.ai_subscription.plan.plus")
+        case .pro:
+            return localizationManager.text("settings.ai_subscription.plan.pro")
+        case .developer:
+            return localizationManager.text("settings.ai_subscription.plan.developer")
+        case .beta:
+            return localizationManager.text("settings.ai_subscription.plan.beta")
+        case .expired:
+            return localizationManager.text("settings.ai_subscription.plan.expired")
+        }
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        date.formatted(date: .long, time: .omitted)
+    }
+
+    @ViewBuilder
+    private func statusRow(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+        }
     }
     
     @ViewBuilder

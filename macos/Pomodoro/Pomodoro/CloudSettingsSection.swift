@@ -143,6 +143,7 @@ struct LoginView: View {
         VStack(alignment: .leading, spacing: 16) {
             AuthProviderButton(provider: .google, isLoading: activeProvider == .google) {
                 Task { @MainActor in
+                    authViewModel.clearError()
                     await performProviderSignIn(provider: .google) {
                         _ = try await AuthManager.shared.signInWithGoogle()
                     }
@@ -151,6 +152,7 @@ struct LoginView: View {
 
             AuthProviderButton(provider: .github, isLoading: activeProvider == .github) {
                 Task { @MainActor in
+                    authViewModel.clearError()
                     await performProviderSignIn(provider: .github) {
                         _ = try await AuthManager.shared.signInWithGithub()
                     }
@@ -163,6 +165,8 @@ struct LoginView: View {
 
             AuthProviderButton(provider: .email, isLoading: false) {
                 withAnimation(.easeInOut(duration: 0.18)) {
+                    providerErrorMessage = nil
+                    authViewModel.clearError()
                     showEmailLogin.toggle()
                 }
             }
@@ -178,7 +182,7 @@ struct LoginView: View {
                     .foregroundStyle(.red)
             }
 
-            if let message = authViewModel.errorMessage, !message.isEmpty {
+            if !showEmailLogin, let message = authViewModel.errorMessage, !message.isEmpty {
                 Text(message)
                     .font(.footnote)
                     .foregroundStyle(.red)
@@ -249,12 +253,14 @@ struct EmailLoginView: View {
     @EnvironmentObject private var localizationManager: LocalizationManager
     @State private var email = ""
     @State private var password = ""
+    @State private var emailErrorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             TextField(localizationManager.text("auth.email.placeholder"), text: $email)
                 .textFieldStyle(.roundedBorder)
                 .textContentType(.emailAddress)
+                .autocorrectionDisabled()
                 .disabled(authViewModel.isLoading)
 
             SecureField(localizationManager.text("auth.password.placeholder"), text: $password)
@@ -262,8 +268,16 @@ struct EmailLoginView: View {
                 .textContentType(.password)
                 .disabled(authViewModel.isLoading)
 
+            if let emailErrorMessage, !emailErrorMessage.isEmpty {
+                Text(emailErrorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
             Button(localizationManager.text("auth.signin_email")) {
                 Task { @MainActor in
+                    emailErrorMessage = nil
+                    authViewModel.clearError()
                     do {
                         try await authViewModel.signInWithEmail(
                             email: email.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -271,7 +285,7 @@ struct EmailLoginView: View {
                         )
                         password = ""
                     } catch {
-                        return
+                        emailErrorMessage = (error as NSError).localizedDescription
                     }
                 }
             }
@@ -287,6 +301,10 @@ struct EmailLoginView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
+        .onAppear {
+            emailErrorMessage = nil
+            authViewModel.clearError()
+        }
     }
 
     private var canSubmit: Bool {

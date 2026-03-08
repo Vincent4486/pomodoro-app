@@ -84,16 +84,7 @@ final class AuthViewModel: ObservableObject {
 
     @MainActor
     func signUpWithEmail(email: String, password: String) async throws {
-        try await performAuthFlow {
-            let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !sanitizedEmail.isEmpty else {
-                throw AuthViewModelError.invalidEmail
-            }
-            guard !password.isEmpty else {
-                throw AuthViewModelError.invalidPassword
-            }
-            _ = try await createUser(email: sanitizedEmail, password: password)
-        }
+        try await signInWithEmail(email: email, password: password)
     }
 
     @MainActor
@@ -106,7 +97,20 @@ final class AuthViewModel: ObservableObject {
             guard !password.isEmpty else {
                 throw AuthViewModelError.invalidPassword
             }
-            _ = try await signIn(email: sanitizedEmail, password: password)
+            do {
+                _ = try await signIn(email: sanitizedEmail, password: password)
+            } catch {
+                let nsError = error as NSError
+                let authCode = AuthErrorCode(rawValue: nsError.code)
+
+                if authCode == .userNotFound {
+                    print("[Auth] Email sign-in user not found, creating account for \(sanitizedEmail)")
+                    _ = try await createUser(email: sanitizedEmail, password: password)
+                    return
+                }
+
+                throw mapEmailAuthError(error)
+            }
         }
     }
 
@@ -143,6 +147,11 @@ final class AuthViewModel: ObservableObject {
     }
 
     @MainActor
+    func clearError() {
+        errorMessage = nil
+    }
+
+    @MainActor
     private func performAuthFlow(_ operation: () async throws -> Void) async throws {
         startListeningIfNeeded()
         let auth = try currentAuth()
@@ -166,6 +175,8 @@ final class AuthViewModel: ObservableObject {
         return try await withCheckedThrowingContinuation { continuation in
             auth.createUser(withEmail: email, password: password) { result, error in
                 if let error {
+                    let nsError = error as NSError
+                    print("[Auth] Email registration error: \(nsError.localizedDescription) [\(nsError.domain):\(nsError.code)]")
                     continuation.resume(throwing: error)
                     return
                 }
@@ -178,11 +189,32 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    private func mapEmailAuthError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == AuthErrorDomain,
+              let code = AuthErrorCode(rawValue: nsError.code) else {
+            return error
+        }
+
+        switch code {
+        case .wrongPassword, .invalidCredential:
+            return AuthViewModelError.incorrectPassword
+        case .weakPassword:
+            return AuthViewModelError.weakPassword
+        case .invalidEmail:
+            return AuthViewModelError.invalidEmailAddress
+        default:
+            return error
+        }
+    }
+
     private func signIn(email: String, password: String) async throws -> AuthDataResult {
         let auth = try currentAuth()
         return try await withCheckedThrowingContinuation { continuation in
             auth.signIn(withEmail: email, password: password) { result, error in
                 if let error {
+                    let nsError = error as NSError
+                    print("[Auth] Email sign-in error: \(nsError.localizedDescription) [\(nsError.domain):\(nsError.code)]")
                     continuation.resume(throwing: error)
                     return
                 }
@@ -244,6 +276,9 @@ final class AuthViewModel: ObservableObject {
         case missingResult
         case invalidEmail
         case invalidPassword
+        case incorrectPassword
+        case weakPassword
+        case invalidEmailAddress
         case notAuthenticated
         case missingToken
 
@@ -257,6 +292,12 @@ final class AuthViewModel: ObservableObject {
                 return LocalizationManager.shared.text("auth.error.invalid_email")
             case .invalidPassword:
                 return LocalizationManager.shared.text("auth.error.invalid_password")
+            case .incorrectPassword:
+                return LocalizationManager.shared.text("auth.error.incorrect_password")
+            case .weakPassword:
+                return LocalizationManager.shared.text("auth.error.weak_password")
+            case .invalidEmailAddress:
+                return LocalizationManager.shared.text("auth.error.invalid_email_address")
             case .notAuthenticated:
                 return LocalizationManager.shared.text("auth.error.authentication_required")
             case .missingToken:

@@ -10,6 +10,10 @@
 		0406D042B8164EA2B18986C1 /* WindowBackgroundConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */; };
 		1C500AF364889EDC9C8772BC /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB46B7CF8A7C0F510CF4 /* AuthManager.swift */; };
 		1C500AF464889EDC9C8772BC /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB47B7CF8A7C0F510CF4 /* AuthViewModel.swift */; };
+		1C500AF564889EDC9C8772BC /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB48B7CF8A7C0F510CF4 /* AIService.swift */; };
+		A1B2C3D40000000000000001 /* AIAssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D50000000000000001 /* AIAssistantView.swift */; };
+		A1B2C3D60000000000000001 /* TaskMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D70000000000000001 /* TaskMarkdownView.swift */; };
+		A1B2C3D80000000000000001 /* EisenhowerMatrixView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D90000000000000001 /* EisenhowerMatrixView.swift */; };
 		4BDE965F88F5BUILDCBB5DF2 /* CalendarDayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDE965F88F54754BCBB5DF2 /* CalendarDayView.swift */; };
 		4DD2B11CF188B287CE18674F /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D95945228BEC2D75F362FF53 /* APIClient.swift */; };
 		7C217B312F3F89DD0076D4DA /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7C217B302F3F89DD0076D4DA /* GoogleService-Info.plist */; };
@@ -102,6 +106,10 @@
 		49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowBackgroundConfigurator.swift; sourceTree = "<group>"; };
 		4BDE965F88F54754BCBB5DF2 /* CalendarDayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDayView.swift; sourceTree = "<group>"; };
 		7C217B302F3F89DD0076D4DA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		83E7FB48B7CF8A7C0F510CF4 /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
+		A1B2C3D50000000000000001 /* AIAssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantView.swift; sourceTree = "<group>"; };
+		A1B2C3D70000000000000001 /* TaskMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskMarkdownView.swift; sourceTree = "<group>"; };
+		A1B2C3D90000000000000001 /* EisenhowerMatrixView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EisenhowerMatrixView.swift; sourceTree = "<group>"; };
 		7C360D382F191F17007313D3 /* Pomodoro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pomodoro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C360D502F191F17007313D3 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		7C360D512F191F17007313D3 /* CountdownTimerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountdownTimerEngine.swift; sourceTree = "<group>"; };
@@ -292,6 +300,9 @@
 				9F1C2A3B4D5E6F708192A3B4 /* WeekCalendarView.swift */,
 				D0495D48D1B544D0ABDA97DE /* CalendarMonthView.swift */,
 				D1A1B00C0000000000000001 /* TodoListView.swift */,
+				A1B2C3D50000000000000001 /* AIAssistantView.swift */,
+				A1B2C3D90000000000000001 /* EisenhowerMatrixView.swift */,
+				A1B2C3D70000000000000001 /* TaskMarkdownView.swift */,
 				D1A1B0100000000000000001 /* SettingsPermissionsView.swift */,
 				D1A1B0120000000000000001 /* SettingsView.swift */,
 				ECCF7A685FE13468A938ADD7 /* CloudSettingsSection.swift */,
@@ -338,6 +349,7 @@
 		996106FB04F424063369172E /* Cloud */ = {
 			isa = PBXGroup;
 			children = (
+				83E7FB48B7CF8A7C0F510CF4 /* AIService.swift */,
 				D95945228BEC2D75F362FF53 /* APIClient.swift */,
 				379E0B0F492E771413BBB197 /* AuthStore.swift */,
 				27A07A256CDE64E28DB5028F /* FeatureGate.swift */,
@@ -503,6 +515,9 @@
 				D1A1B0070000000000000001 /* TodoItem.swift in Sources */,
 				D1A1B0090000000000000001 /* TodoStore.swift in Sources */,
 				D1A1B00B0000000000000001 /* TodoListView.swift in Sources */,
+				A1B2C3D40000000000000001 /* AIAssistantView.swift in Sources */,
+				A1B2C3D80000000000000001 /* EisenhowerMatrixView.swift in Sources */,
+				A1B2C3D60000000000000001 /* TaskMarkdownView.swift in Sources */,
 				D1A1B00D0000000000000001 /* RemindersSync.swift in Sources */,
 				D1A1B00F0000000000000001 /* SettingsPermissionsView.swift in Sources */,
 				D1A1B0110000000000000001 /* SettingsView.swift in Sources */,
@@ -516,6 +531,7 @@
 				E1E1E1E1234567890ABCDEF1 /* FeatureFlags.swift in Sources */,
 				1C500AF364889EDC9C8772BC /* AuthManager.swift in Sources */,
 				1C500AF464889EDC9C8772BC /* AuthViewModel.swift in Sources */,
+				1C500AF564889EDC9C8772BC /* AIService.swift in Sources */,
 				A5E1164621F2FA56280B4889 /* CloudSettingsSection.swift in Sources */,
 				BE7A1C1C2E644B6D9B3C1E0D /* AuthSession.swift in Sources */,
 			);

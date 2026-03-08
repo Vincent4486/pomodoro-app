@@ -1547,6 +1547,8 @@ extension Notification.Name {
     static let navigateToCalendar = Notification.Name("navigateToCalendar")
     static let openNewTaskComposer = Notification.Name("openNewTaskComposer")
     static let calendarGoToToday = Notification.Name("calendarGoToToday")
+    static let taskToggleSelectedCompletion = Notification.Name("taskToggleSelectedCompletion")
+    static let taskDeleteSelection = Notification.Name("taskDeleteSelection")
 }
 
 #if DEBUG && PREVIEWS_ENABLED

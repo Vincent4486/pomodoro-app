@@ -1,5 +1,17 @@
 import Foundation
 
+struct TodoSubtask: Identifiable, Codable, Equatable {
+    let id: UUID
+    var title: String
+    var completed: Bool
+
+    init(id: UUID = UUID(), title: String, completed: Bool = false) {
+        self.id = id
+        self.title = title
+        self.completed = completed
+    }
+}
+
 /// Primary task data model for the app.
 /// Represents both internal todos and synced Apple Reminders.
 struct TodoItem: Identifiable, Codable, Equatable {
@@ -7,7 +19,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     /// External identifier used for all cross-system sync. Format: pomodoroapp://task/<UUID>
     var externalId: String
     var title: String
-    var notes: String?
+    var descriptionMarkdown: String?
     var isCompleted: Bool
     var dueDate: Date?
     /// Indicates whether the stored `dueDate` has a user-selected time component.
@@ -15,6 +27,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var hasDueTime: Bool
     var durationMinutes: Int?
     var priority: Priority
+    var subtasks: [TodoSubtask]
     var createdAt: Date
     var modifiedAt: Date
     var tags: [String]
@@ -36,7 +49,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var syncStatus: SyncStatus
     
     enum CodingKeys: String, CodingKey {
-        case id, externalId, title, notes, isCompleted, dueDate, hasDueTime, durationMinutes, priority, createdAt, modifiedAt, tags, syncToCalendar, linkedCalendarEventId, reminderIdentifier, calendarEventIdentifier, syncStatus
+        case id, externalId, title, notes, descriptionMarkdown, isCompleted, dueDate, hasDueTime, durationMinutes, priority, subtasks, createdAt, modifiedAt, tags, syncToCalendar, linkedCalendarEventId, reminderIdentifier, calendarEventIdentifier, syncStatus
     }
     
     enum Priority: Int, Codable, CaseIterable {
@@ -60,11 +73,13 @@ struct TodoItem: Identifiable, Codable, Equatable {
         externalId: String? = nil,
         title: String,
         notes: String? = nil,
+        descriptionMarkdown: String? = nil,
         isCompleted: Bool = false,
         dueDate: Date? = nil,
         hasDueTime: Bool = false,
         durationMinutes: Int? = nil,
         priority: Priority = .none,
+        subtasks: [TodoSubtask] = [],
         createdAt: Date = Date(),
         modifiedAt: Date = Date(),
         tags: [String] = [],
@@ -77,12 +92,13 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.id = id
         self.externalId = externalId ?? ExternalID.taskId(for: id)
         self.title = title
-        self.notes = notes
+        self.descriptionMarkdown = descriptionMarkdown ?? notes
         self.isCompleted = isCompleted
         self.dueDate = dueDate
         self.hasDueTime = hasDueTime
         self.durationMinutes = durationMinutes
         self.priority = priority
+        self.subtasks = subtasks
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
         self.tags = tags
@@ -102,12 +118,15 @@ struct TodoItem: Identifiable, Codable, Equatable {
             externalId = ExternalID.taskId(for: id)
         }
         title = try container.decode(String.self, forKey: .title)
-        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        descriptionMarkdown =
+            try container.decodeIfPresent(String.self, forKey: .descriptionMarkdown)
+            ?? container.decodeIfPresent(String.self, forKey: .notes)
         isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
         dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
         hasDueTime = try container.decodeIfPresent(Bool.self, forKey: .hasDueTime) ?? (dueDate != nil)
         durationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes)
         priority = try container.decodeIfPresent(Priority.self, forKey: .priority) ?? .none
+        subtasks = try container.decodeIfPresent([TodoSubtask].self, forKey: .subtasks) ?? []
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? Date()
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
@@ -123,12 +142,16 @@ struct TodoItem: Identifiable, Codable, Equatable {
         try container.encode(id, forKey: .id)
         try container.encode(externalId, forKey: .externalId)
         try container.encode(title, forKey: .title)
-        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(descriptionMarkdown, forKey: .descriptionMarkdown)
+        try container.encodeIfPresent(descriptionMarkdown, forKey: .notes)
         try container.encode(isCompleted, forKey: .isCompleted)
         try container.encodeIfPresent(dueDate, forKey: .dueDate)
         try container.encode(hasDueTime, forKey: .hasDueTime)
         try container.encodeIfPresent(durationMinutes, forKey: .durationMinutes)
         try container.encode(priority, forKey: .priority)
+        if !subtasks.isEmpty {
+            try container.encode(subtasks, forKey: .subtasks)
+        }
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(modifiedAt, forKey: .modifiedAt)
         if !tags.isEmpty {
@@ -148,10 +171,25 @@ struct TodoItem: Identifiable, Codable, Equatable {
     
     mutating func update(title: String? = nil, notes: String? = nil, dueDate: Date? = nil, priority: Priority? = nil) {
         if let title = title { self.title = title }
-        if let notes = notes { self.notes = notes }
+        if let notes = notes { self.descriptionMarkdown = notes }
         if let dueDate = dueDate { self.dueDate = dueDate }
         if let priority = priority { self.priority = priority }
         modifiedAt = Date()
+    }
+
+    var notes: String? {
+        get { descriptionMarkdown }
+        set { descriptionMarkdown = newValue }
+    }
+
+    var pomodoroEstimate: Int? {
+        get {
+            guard let durationMinutes else { return nil }
+            return max(1, Int(ceil(Double(durationMinutes) / 25.0)))
+        }
+        set {
+            durationMinutes = newValue.map { max(1, $0) * 25 }
+        }
     }
 
     /// Convenience alias to align with sync field naming.

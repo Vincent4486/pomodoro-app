@@ -78,12 +78,24 @@ struct PomodoroApp: App {
                 Button("New Task") {
                     openNewTaskComposer()
                 }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .keyboardShortcut("n", modifiers: [.command])
 
                 Button("Open Task List") {
                     navigateTo(.navigateToTasks)
                 }
                 .keyboardShortcut("0", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Toggle Task Done") {
+                    NotificationCenter.default.post(name: .taskToggleSelectedCompletion, object: nil)
+                }
+                .keyboardShortcut("d", modifiers: [.command])
+
+                Button("Delete Task") {
+                    NotificationCenter.default.post(name: .taskDeleteSelection, object: nil)
+                }
+                .keyboardShortcut(.delete, modifiers: [.command])
             }
 
             CommandMenu("Calendar") {

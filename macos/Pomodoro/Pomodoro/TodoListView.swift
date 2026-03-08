@@ -9,24 +9,41 @@ struct TodoListView: View {
     @ObservedObject var planningStore: PlanningStore
     @ObservedObject var remindersSync: RemindersSync
     @ObservedObject var permissionsManager: PermissionsManager
+    @ObservedObject private var featureGate = FeatureGate.shared
+    @EnvironmentObject private var authViewModel: AuthViewModel
     @EnvironmentObject private var localizationManager: LocalizationManager
     
     @State private var showingEditor = false
     @State private var editingItem: TodoItem?
     @State private var titleField = ""
-    @State private var notesField = ""
+    @State private var descriptionField = ""
     @State private var tagsField = ""
     @State private var dueDateEnabled = false
     @State private var dueDateField = Date()
     /// Time is opt-in; we default to date-only for quick entry.
     @State private var includeDueTime = false
     @State private var selectedSegment: Segment = .active
+    @State private var taskViewMode: TaskViewMode = .list
     @State private var syncToCalendarField = false
+    @State private var priorityField: TodoItem.Priority = .none
+    @State private var pomodoroEstimateField = 1
     @State private var selectedTaskIDs: Set<UUID> = []
     @State private var lastSelectedTaskID: UUID?
+    @State private var expandedTaskIDs: Set<UUID> = []
+    @State private var subtaskDrafts: [UUID: String] = [:]
     @State private var batchDueDate: Date = Date()
     @State private var showBatchDeleteConfirmation = false
     @State private var showTaskHint = false
+    @State private var aiEstimatedHours = 1
+    @State private var isGeneratingAIPlan = false
+    @State private var aiPlanErrorMessage: String?
+    @State private var showAILoginSheet = false
+    @State private var showAIUpgradeModal = false
+    @State private var aiUpgradeTitleOverride: String?
+    @State private var aiUpgradeBodyOverride: String?
+    @State private var showAIAssistant = false
+    @State private var isRunningAIAssistant = false
+    @State private var aiAssistantErrorMessage: String?
     
     private static let taskHintDefaultsKey = "com.pomodoro.taskHintShown"
     
@@ -36,7 +53,14 @@ struct TodoListView: View {
 
         var id: String { rawValue }
     }
-    
+
+    private enum TaskViewMode: String, CaseIterable, Identifiable {
+        case list
+        case matrix
+
+        var id: String { rawValue }
+    }
+
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -58,6 +82,15 @@ struct TodoListView: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         formatter.locale = .autoupdatingCurrent
+        return formatter
+    }()
+
+    private static let aiDeadlineFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
     
@@ -115,8 +148,30 @@ struct TodoListView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(remindersSync.isSyncing)
                 }
+
+                Button {
+                    aiAssistantErrorMessage = nil
+                    showAIAssistant = true
+                } label: {
+                    Label(localizationManager.text("tasks.ai_assistant.button"), systemImage: "sparkles")
+                }
+                .buttonStyle(.bordered)
                 
                 Spacer()
+
+                Picker("", selection: $taskViewMode) {
+                    Text(localizationManager.text("tasks.view.list")).tag(TaskViewMode.list)
+                    Text(localizationManager.text("tasks.view.matrix")).tag(TaskViewMode.matrix)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+                .onChange(of: taskViewMode) { _, newMode in
+                    guard newMode == .matrix, !featureGate.canUseEisenhowerMatrix else { return }
+                    taskViewMode = .list
+                    aiUpgradeTitleOverride = localizationManager.text("tasks.matrix.requires_pro")
+                    aiUpgradeBodyOverride = localizationManager.text("tasks.matrix.requires_pro_body")
+                    showAIUpgradeModal = true
+                }
                 
                 Picker("", selection: $selectedSegment) {
                     Text(localizationManager.text("tasks.segment.active")).tag(Segment.active)
@@ -127,6 +182,17 @@ struct TodoListView: View {
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 12)
+
+            if let aiAssistantErrorMessage, !aiAssistantErrorMessage.isEmpty {
+                HStack {
+                    Text(aiAssistantErrorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                    Spacer()
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 8)
+            }
             
             if let last = remindersSync.lastSyncDate {
                 HStack {
@@ -152,18 +218,27 @@ struct TodoListView: View {
             }
             
             // Tasks list
-            ScrollView {
-                if filteredItems.isEmpty {
-                    emptyState
-                } else {
-                    LazyVStack(spacing: 8) {
-                        ForEach(filteredItems) { item in
-                            todoRow(item)
-                                .opacity(selectedSegment == .completed ? 0.9 : 1.0)
-                                .allowsHitTesting(selectedSegment == .completed ? false : true)
-                        }
+            if taskViewMode == .matrix, featureGate.canUseEisenhowerMatrix, selectedSegment == .active {
+                ScrollView {
+                    EisenhowerMatrixView(tasks: filteredItems) { task in
+                        openEditorForEdit(task)
                     }
                     .padding(16)
+                }
+            } else {
+                ScrollView {
+                    if filteredItems.isEmpty {
+                        emptyState
+                    } else {
+                        LazyVStack(spacing: 8) {
+                            ForEach(filteredItems) { item in
+                                todoRow(item)
+                                    .opacity(selectedSegment == .completed ? 0.9 : 1.0)
+                                    .allowsHitTesting(selectedSegment == .completed ? false : true)
+                            }
+                        }
+                        .padding(16)
+                    }
                 }
             }
             
@@ -175,6 +250,40 @@ struct TodoListView: View {
         .sheet(isPresented: $showingEditor) {
             taskEditorSheet
         }
+        .sheet(isPresented: $showAILoginSheet) {
+            LoginSheetView()
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $showAIUpgradeModal) {
+            aiUpgradeSheet
+        }
+        .sheet(isPresented: $showAIAssistant) {
+            AIAssistantView(
+                tasks: toolbarAICandidateTasks,
+                isLoading: isRunningAIAssistant,
+                errorMessage: aiAssistantErrorMessage,
+                isActionEnabled: { action in
+                    featureGate.canUseAIAssistantAction(action)
+                },
+                onClose: { showAIAssistant = false },
+                onLockedActionTap: { action in
+                    aiUpgradeTitleOverride = action == .planning
+                        ? localizationManager.text("tasks.ai_assistant.planning_requires_pro")
+                        : localizationManager.text("tasks.ai_assistant.plus_feature_title")
+                    aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
+                    showAIUpgradeModal = true
+                },
+                onRunAction: { action, tasks, dueDate, estimatedHours in
+                    await handleAIAssistantAction(
+                        action,
+                        selectedTasks: tasks,
+                        dueDate: dueDate,
+                        estimatedHours: estimatedHours
+                    )
+                }
+            )
+            .environmentObject(localizationManager)
+        }
         .onAppear {
             permissionsManager.refreshRemindersStatus()
             if !UserDefaults.standard.bool(forKey: Self.taskHintDefaultsKey) {
@@ -183,6 +292,12 @@ struct TodoListView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openNewTaskComposer)) { _ in
             openEditorForNew()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .taskToggleSelectedCompletion)) { _ in
+            handleKeyboardToggleDone()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .taskDeleteSelection)) { _ in
+            handleKeyboardDelete()
         }
     }
     
@@ -315,100 +430,123 @@ struct TodoListView: View {
     @ViewBuilder
     private func todoRow(_ item: TodoItem) -> some View {
         let isSelected = selectedTaskIDs.contains(item.id)
-        HStack(spacing: 12) {
-            Button(action: {
-                todoStore.toggleCompletion(item)
-                
-                // Sync to Reminders if authorized and linked
-                if permissionsManager.isRemindersAuthorized,
-                   item.reminderIdentifier != nil {
-                    Task {
-                        if let updatedItem = todoStore.items.first(where: { $0.id == item.id }) {
-                            try? await remindersSync.syncTask(updatedItem)
+        let isExpanded = expandedTaskIDs.contains(item.id)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Button(action: {
+                    todoStore.toggleCompletion(item)
+                    
+                    if permissionsManager.isRemindersAuthorized,
+                       item.reminderIdentifier != nil {
+                        Task {
+                            if let updatedItem = todoStore.items.first(where: { $0.id == item.id }) {
+                                try? await remindersSync.syncTask(updatedItem)
+                            }
                         }
                     }
+                }) {
+                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(item.isCompleted ? .green : .secondary)
                 }
-            }) {
-                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(item.isCompleted ? .green : .secondary)
-            }
-            .buttonStyle(.plain)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.headline)
-                    .strikethrough(item.isCompleted)
-                    .foregroundStyle(item.isCompleted ? .secondary : .primary)
-                
-                if let notes = item.notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.caption)
+                .buttonStyle(.plain)
+
+                Button {
+                    toggleExpanded(item.id)
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 14)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
-                
-                if IntentMarkers.containsFocusIntent(in: item.title) || IntentMarkers.containsFocusIntent(in: item.notes) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "target")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(localizationManager.text("tasks.focus_marked"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                if !item.tags.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(item.tags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.12))
-                                .foregroundStyle(.blue)
-                                .cornerRadius(4)
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title)
+                        .font(.headline)
+                        .strikethrough(item.isCompleted)
+                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
+
+                    if let descriptionMarkdown = item.descriptionMarkdown, !descriptionMarkdown.isEmpty {
+                        if isExpanded, featureGate.canUseTaskMarkdown {
+                            TaskMarkdownView(markdown: descriptionMarkdown)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(descriptionMarkdown)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
-                    }
-                }
-                
-                HStack(spacing: 8) {
-                    if item.priority != .none {
-                        priorityBadge(item.priority)
-                    }
-                    
-                    if let dueDate = item.dueDate {
-                        Label(formattedDueDate(item, dueDate: dueDate), systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    if item.reminderIdentifier != nil {
-                        Label(localizationManager.text("tasks.status.synced"), systemImage: "checkmark.icloud")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    } else if item.syncToCalendar, (item.linkedCalendarEventId ?? item.calendarEventIdentifier) != nil {
-                        Label(localizationManager.text("tasks.status.in_calendar"), systemImage: "calendar.badge.checkmark")
-                            .font(.caption)
-                            .foregroundStyle(.green)
                     }
 
-                    if planningItem(for: item) != nil {
-                        Label(planningStatusLabel(for: item), systemImage: "calendar.badge.clock")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    } else if !item.isCompleted {
-                        Label(localizationManager.text("tasks.unplanned"), systemImage: "calendar.badge.exclamationmark")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                    if IntentMarkers.containsFocusIntent(in: item.title) || IntentMarkers.containsFocusIntent(in: item.notes) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "target")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(localizationManager.text("tasks.focus_marked"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if !item.tags.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(item.tags, id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.12))
+                                    .foregroundStyle(.blue)
+                                    .cornerRadius(4)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        if item.priority != .none {
+                            priorityBadge(item.priority)
+                        }
+
+                        if let estimate = item.pomodoroEstimate {
+                            Label(localizationManager.format("tasks.pomodoro_estimate_value", estimate), systemImage: "timer")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        if let dueDate = item.dueDate {
+                            Label(formattedDueDate(item, dueDate: dueDate), systemImage: "calendar")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        if item.reminderIdentifier != nil {
+                            Label(localizationManager.text("tasks.status.synced"), systemImage: "checkmark.icloud")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        } else if item.syncToCalendar, (item.linkedCalendarEventId ?? item.calendarEventIdentifier) != nil {
+                            Label(localizationManager.text("tasks.status.in_calendar"), systemImage: "calendar.badge.checkmark")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+
+                        if planningItem(for: item) != nil {
+                            Label(planningStatusLabel(for: item), systemImage: "calendar.badge.clock")
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                        } else if !item.isCompleted {
+                            Label(localizationManager.text("tasks.unplanned"), systemImage: "calendar.badge.exclamationmark")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                 }
-            }
-            
-            Spacer()
-            
-            Menu {
+                
+                Spacer()
+                
+                Menu {
                 if permissionsManager.isRemindersAuthorized {
                     if item.reminderIdentifier == nil {
                         Button(action: {
@@ -459,11 +597,16 @@ struct TodoListView: View {
                 }) {
                     Label(localizationManager.text("common.delete"), systemImage: "trash")
                 }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundStyle(.secondary)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+
+            if isExpanded {
+                subtaskSection(for: item)
+            }
         }
         .padding(12)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
@@ -496,6 +639,113 @@ struct TodoListView: View {
             return .orange
         case .high:
             return .red
+        }
+    }
+
+    @ViewBuilder
+    private func subtaskSection(for item: TodoItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+
+            Text(localizationManager.text("tasks.subtasks.title"))
+                .font(.subheadline.weight(.semibold))
+
+            if !item.subtasks.isEmpty {
+                ForEach(item.subtasks) { subtask in
+                    HStack(spacing: 8) {
+                        Button {
+                            guard featureGate.canUseSubtasks else {
+                                aiUpgradeTitleOverride = localizationManager.text("tasks.subtasks.requires_plus")
+                                aiUpgradeBodyOverride = localizationManager.text("tasks.subtasks.requires_plus_body")
+                                showAIUpgradeModal = true
+                                return
+                            }
+                            todoStore.toggleSubtask(taskID: item.id, subtaskID: subtask.id)
+                        } label: {
+                            Image(systemName: subtask.completed ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(subtask.completed ? .green : .secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text(subtask.title)
+                            .font(.subheadline)
+                            .strikethrough(subtask.completed)
+                            .foregroundStyle(subtask.completed ? .secondary : .primary)
+
+                        Spacer()
+                    }
+                }
+            }
+
+            if featureGate.canUseSubtasks {
+                HStack(spacing: 8) {
+                    TextField(
+                        localizationManager.text("tasks.subtasks.placeholder"),
+                        text: Binding(
+                            get: { subtaskDrafts[item.id] ?? "" },
+                            set: { subtaskDrafts[item.id] = $0 }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+
+                    Button(localizationManager.text("common.add")) {
+                        let draft = subtaskDrafts[item.id] ?? ""
+                        todoStore.addSubtask(to: item.id, title: draft)
+                        subtaskDrafts[item.id] = ""
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled((subtaskDrafts[item.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            } else {
+                Button {
+                    aiUpgradeTitleOverride = localizationManager.text("tasks.subtasks.requires_plus")
+                    aiUpgradeBodyOverride = localizationManager.text("tasks.subtasks.requires_plus_body")
+                    showAIUpgradeModal = true
+                } label: {
+                    Label(localizationManager.text("tasks.subtasks.unlock"), systemImage: "lock.fill")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.leading, 34)
+    }
+
+    private func toggleExpanded(_ id: UUID) {
+        if expandedTaskIDs.contains(id) {
+            expandedTaskIDs.remove(id)
+        } else {
+            expandedTaskIDs.insert(id)
+        }
+    }
+
+    private var keyboardFocusedTask: TodoItem? {
+        if let editingItem,
+           let current = todoStore.items.first(where: { $0.id == editingItem.id }) {
+            return current
+        }
+        if let selectedID = selectedTaskIDs.first {
+            return todoStore.items.first(where: { $0.id == selectedID })
+        }
+        return nil
+    }
+
+    private func handleKeyboardToggleDone() {
+        guard featureGate.canUseTaskKeyboardShortcuts,
+              let task = keyboardFocusedTask else {
+            return
+        }
+        todoStore.toggleCompletion(task)
+    }
+
+    private func handleKeyboardDelete() {
+        guard featureGate.canUseTaskKeyboardShortcuts,
+              let task = keyboardFocusedTask else {
+            return
+        }
+        todoStore.deleteItem(task)
+        if editingItem?.id == task.id {
+            resetEditor()
+            showingEditor = false
         }
     }
     
@@ -543,6 +793,10 @@ struct TodoListView: View {
         case .completed:
             return todoStore.completedItems.sorted { $0.modifiedAt > $1.modifiedAt }
         }
+    }
+
+    private var toolbarAICandidateTasks: [TodoItem] {
+        filteredItems
     }
 
     private var taskPlansByID: [UUID: PlanningItem] {
@@ -635,6 +889,41 @@ struct TodoListView: View {
             VStack(alignment: .leading, spacing: 10) {
                 TextField(localizationManager.text("tasks.editor.title_placeholder"), text: $titleField)
                     .textFieldStyle(.roundedBorder)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(localizationManager.text("tasks.ai_plan.estimated_hours"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Stepper(value: $aiEstimatedHours, in: 1...40) {
+                        Text(localizationManager.format("tasks.ai_plan.estimated_hours_value", aiEstimatedHours))
+                    }
+                }
+
+                if featureGate.canUseAdvancedTasks {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(localizationManager.text("tasks.editor.priority"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Picker("", selection: $priorityField) {
+                            ForEach(TodoItem.Priority.allCases, id: \.self) { priority in
+                                Text(priority.displayName).tag(priority)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(localizationManager.text("tasks.editor.pomodoro_estimate"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Stepper(value: $pomodoroEstimateField, in: 1...20) {
+                            Text(localizationManager.format("tasks.pomodoro_estimate_value", pomodoroEstimateField))
+                        }
+                    }
+                }
                 
                 Toggle(localizationManager.text("tasks.editor.set_due_date"), isOn: $dueDateEnabled)
                     .onChange(of: dueDateEnabled) { _, isOn in
@@ -667,11 +956,22 @@ struct TodoListView: View {
                     }
                 }
                 
-                Text(localizationManager.text("tasks.editor.notes_optional"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                TextField(localizationManager.text("tasks.editor.notes_placeholder"), text: $notesField, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                if featureGate.canUseTaskMarkdown {
+                    Text(localizationManager.text("tasks.editor.description_markdown"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    TextField(localizationManager.text("tasks.editor.notes_placeholder"), text: $descriptionField, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    Button {
+                        aiUpgradeTitleOverride = localizationManager.text("tasks.markdown.requires_plus")
+                        aiUpgradeBodyOverride = localizationManager.text("tasks.markdown.requires_plus_body")
+                        showAIUpgradeModal = true
+                    } label: {
+                        Label(localizationManager.text("tasks.markdown.unlock"), systemImage: "lock.fill")
+                    }
+                    .buttonStyle(.bordered)
+                }
                 
                 Text(localizationManager.text("tasks.editor.tags_optional"))
                     .font(.subheadline)
@@ -685,6 +985,12 @@ struct TodoListView: View {
                     .foregroundStyle(.primary)
                     .padding(.top, 6)
                     .help(localizationManager.text("tasks.editor.sync_to_calendar_help"))
+
+                if let aiPlanErrorMessage, !aiPlanErrorMessage.isEmpty {
+                    Text(aiPlanErrorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
             }
             
             Spacer(minLength: 0)
@@ -697,12 +1003,56 @@ struct TodoListView: View {
                 .buttonStyle(.bordered)
                 
                 Spacer()
+
+                Button(action: handleAIPlanButtonTapped) {
+                    if isGeneratingAIPlan {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(localizationManager.text("tasks.ai_plan.loading"))
+                        }
+                    } else {
+                        Label(localizationManager.text("tasks.ai_plan.button"), systemImage: "sparkles")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isGeneratingAIPlan || titleField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 
                 Button(editingItem == nil ? localizationManager.text("common.add") : localizationManager.text("common.save")) {
                     saveTask()
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(titleField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
+    }
+
+    private var aiUpgradeSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(aiUpgradeTitleOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_title"))
+                .font(.title3.weight(.semibold))
+
+            Text(aiUpgradeBodyOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_body"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button(localizationManager.text("common.cancel")) {
+                    aiUpgradeTitleOverride = nil
+                    aiUpgradeBodyOverride = nil
+                    showAIUpgradeModal = false
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button(localizationManager.text("tasks.ai_assistant.upgrade")) {
+                    openPricingPage()
+                }
+                .buttonStyle(.borderedProminent)
             }
         }
         .padding(24)
@@ -712,19 +1062,24 @@ struct TodoListView: View {
     private func openEditorForNew() {
         editingItem = nil
         titleField = ""
-        notesField = ""
+        descriptionField = ""
         tagsField = ""
         dueDateEnabled = false
         dueDateField = Date()
         includeDueTime = false
         syncToCalendarField = false
+        priorityField = .none
+        pomodoroEstimateField = 1
+        aiEstimatedHours = 1
+        aiPlanErrorMessage = nil
+        isGeneratingAIPlan = false
         showingEditor = true
     }
     
     private func openEditorForEdit(_ item: TodoItem) {
         editingItem = item
         titleField = item.title
-        notesField = item.notes ?? ""
+        descriptionField = item.descriptionMarkdown ?? ""
         tagsField = item.tags.joined(separator: ", ")
         if let due = item.dueDate {
             dueDateEnabled = true
@@ -736,39 +1091,49 @@ struct TodoListView: View {
             includeDueTime = false
         }
         syncToCalendarField = item.syncToCalendar
+        priorityField = item.priority
+        pomodoroEstimateField = item.pomodoroEstimate ?? 1
+        aiEstimatedHours = max(1, ((item.durationMinutes ?? 25) + 59) / 60)
+        aiPlanErrorMessage = nil
+        isGeneratingAIPlan = false
         showingEditor = true
     }
     
     private func resetEditor() {
         editingItem = nil
         titleField = ""
-        notesField = ""
+        descriptionField = ""
         tagsField = ""
         dueDateEnabled = false
         dueDateField = Date()
         includeDueTime = false
         syncToCalendarField = false
+        priorityField = .none
+        pomodoroEstimateField = 1
+        aiEstimatedHours = 1
+        aiPlanErrorMessage = nil
+        isGeneratingAIPlan = false
     }
     
     private func saveTask() {
+        aiPlanErrorMessage = nil
         let trimmedTitle = titleField.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
         
         let hasDueTime = dueDateEnabled ? includeDueTime : false
         let dueDate = dueDateEnabled ? normalizedDueDate(from: dueDateField, includeTime: includeDueTime) : nil
-        let trimmedNotes = notesField.trimmingCharacters(in: .whitespacesAndNewlines)
-        let tags = tagsField
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let trimmedDescription = descriptionField.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tags = parsedTagsField()
         
         if var editing = editingItem {
             editing.title = trimmedTitle
-            editing.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+            editing.descriptionMarkdown = trimmedDescription.isEmpty ? nil : trimmedDescription
             editing.dueDate = dueDate
             editing.hasDueTime = hasDueTime
             editing.tags = tags
             editing.syncToCalendar = syncToCalendarField
+            editing.priority = featureGate.canUseAdvancedTasks ? priorityField : .none
+            editing.pomodoroEstimate = featureGate.canUseAdvancedTasks ? pomodoroEstimateField : nil
             todoStore.updateItem(editing)
             
             if permissionsManager.isRemindersAuthorized,
@@ -778,9 +1143,11 @@ struct TodoListView: View {
         } else {
             let newItem = TodoItem(
                 title: trimmedTitle,
-                notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
+                descriptionMarkdown: trimmedDescription.isEmpty ? nil : trimmedDescription,
                 dueDate: dueDate,
                 hasDueTime: hasDueTime,
+                durationMinutes: featureGate.canUseAdvancedTasks ? pomodoroEstimateField * 25 : nil,
+                priority: featureGate.canUseAdvancedTasks ? priorityField : .none,
                 syncToCalendar: syncToCalendarField
             )
             todoStore.addItem(newItem)
@@ -788,6 +1155,232 @@ struct TodoListView: View {
         
         resetEditor()
         showingEditor = false
+    }
+
+    private func generateAIPlan() async {
+        aiPlanErrorMessage = nil
+
+        let trimmedTitle = titleField.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+
+        guard dueDateEnabled else {
+            aiPlanErrorMessage = localizationManager.text("tasks.ai_plan.requires_deadline")
+            return
+        }
+
+        isGeneratingAIPlan = true
+        defer { isGeneratingAIPlan = false }
+
+        do {
+            let response = try await AIService.shared.taskBreakdown(
+                task: trimmedTitle,
+                deadline: Self.aiDeadlineFormatter.string(from: dueDateField),
+                estimatedHours: aiEstimatedHours
+            )
+            try applyAIPlan(
+                response,
+                dueDate: dueDateEnabled ? normalizedDueDate(from: dueDateField, includeTime: includeDueTime) : nil,
+                hasDueTime: dueDateEnabled ? includeDueTime : false,
+                parentNotes: descriptionField.trimmingCharacters(in: .whitespacesAndNewlines),
+                tags: parsedTagsField(),
+                createAsSubtasks: true
+            )
+            resetEditor()
+            showingEditor = false
+        } catch {
+            aiPlanErrorMessage = (error as NSError).localizedDescription
+        }
+    }
+
+    private func handleAIPlanButtonTapped() {
+        aiPlanErrorMessage = nil
+
+        guard authViewModel.isAuthenticated else {
+            showAILoginSheet = true
+            return
+        }
+
+        if !featureGate.canUseAIAssistantBreakdown {
+            aiUpgradeTitleOverride = localizationManager.text("tasks.ai_assistant.plus_feature_title")
+            aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
+            showAIUpgradeModal = true
+            return
+        }
+
+        if let quotaMessage = featureGate.aiPlanningQuotaMessage {
+            aiPlanErrorMessage = quotaMessage
+            return
+        }
+
+        guard featureGate.canRunAIPlanningRequest else {
+            aiPlanErrorMessage = featureGate.aiAssistantDisabledReason(for: .breakdown)
+            return
+        }
+
+        Task { @MainActor in
+            await generateAIPlan()
+        }
+    }
+
+    private func handleAIAssistantAction(
+        _ action: AIAssistantAction,
+        selectedTasks: [TodoItem],
+        dueDate: Date,
+        estimatedHours: Int
+    ) async {
+        aiAssistantErrorMessage = nil
+
+        guard authViewModel.isAuthenticated else {
+            showAIAssistant = false
+            showAILoginSheet = true
+            return
+        }
+
+        if featureGate.shouldShowUpgradeModal(for: action) {
+            aiUpgradeTitleOverride = action == .planning
+                ? localizationManager.text("tasks.ai_assistant.planning_requires_pro")
+                : localizationManager.text("tasks.ai_assistant.plus_feature_title")
+            aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
+            showAIUpgradeModal = true
+            return
+        }
+
+        if let quotaMessage = featureGate.aiPlanningQuotaMessage {
+            aiAssistantErrorMessage = quotaMessage
+            return
+        }
+
+        guard featureGate.canUseAIAssistantAction(action), !featureGate.isAIQuotaExhausted else {
+            aiAssistantErrorMessage = featureGate.aiAssistantDisabledReason(for: action)
+            return
+        }
+
+        guard !selectedTasks.isEmpty else {
+            return
+        }
+
+        isRunningAIAssistant = true
+        defer { isRunningAIAssistant = false }
+
+        do {
+            let response: AIService.AIPlanningResponse
+
+            switch action {
+            case .breakdown:
+                response = try await AIService.shared.taskBreakdown(
+                    task: assistantBreakdownPrompt(for: selectedTasks[0]),
+                    deadline: Self.aiDeadlineFormatter.string(from: dueDate),
+                    estimatedHours: estimatedHours
+                )
+            case .planning:
+                response = try await AIService.shared.taskPlanning(
+                    tasks: selectedTasks.map(\.title),
+                    deadline: Self.aiDeadlineFormatter.string(from: dueDate),
+                    estimatedHours: estimatedHours
+                )
+            }
+
+            try applyAIPlan(
+                response,
+                dueDate: Calendar.current.startOfDay(for: dueDate),
+                hasDueTime: false,
+                parentNotes: assistantNotes(for: selectedTasks, action: action),
+                tags: assistantTags(for: selectedTasks),
+                createAsSubtasks: true
+            )
+            showAIAssistant = false
+        } catch {
+            aiAssistantErrorMessage = (error as NSError).localizedDescription
+        }
+    }
+
+    private func assistantBreakdownPrompt(for task: TodoItem) -> String {
+        let notes = task.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !notes.isEmpty else {
+            return task.title
+        }
+        return "\(task.title)\n\nContext:\n\(notes)"
+    }
+
+    private func assistantNotes(for tasks: [TodoItem], action: AIAssistantAction) -> String {
+        switch action {
+        case .breakdown:
+            return tasks[0].notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        case .planning:
+            let titles = tasks.map(\.title).joined(separator: ", ")
+            return localizationManager.format("tasks.ai_plan.generated_note", titles, tasks.count)
+        }
+    }
+
+    private func assistantTags(for tasks: [TodoItem]) -> [String] {
+        Array(Set(tasks.flatMap(\.tags))).sorted()
+    }
+
+    private func openPricingPage() {
+        guard let url = URL(string: "https://pomodoro-app.tech") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func applyAIPlan(
+        _ response: AIService.TaskBreakdownResponse,
+        dueDate: Date?,
+        hasDueTime: Bool,
+        parentNotes: String,
+        tags: [String],
+        createAsSubtasks: Bool = false
+    ) throws {
+        guard !response.subtasks.isEmpty else {
+            throw AIService.AIServiceError.invalidResponse
+        }
+
+        if createAsSubtasks, featureGate.canUseSubtasks {
+            let item = TodoItem(
+                title: response.taskTitle,
+                descriptionMarkdown: parentNotes.isEmpty ? nil : parentNotes,
+                dueDate: dueDate,
+                hasDueTime: hasDueTime,
+                durationMinutes: max(1, response.estimatedPomodoros) * 25,
+                priority: .medium,
+                subtasks: response.subtasks.map { TodoSubtask(title: "\($0.title) (\($0.pomodoros)x25m)") },
+                tags: tags,
+                syncToCalendar: false
+            )
+            todoStore.addItem(item)
+        } else {
+            for subtask in response.subtasks {
+                let item = TodoItem(
+                    title: subtask.title,
+                    descriptionMarkdown: aiNotes(
+                        parentTaskTitle: response.taskTitle,
+                        parentNotes: parentNotes,
+                        pomodoros: subtask.pomodoros
+                    ),
+                    dueDate: dueDate,
+                    hasDueTime: hasDueTime,
+                    durationMinutes: max(1, subtask.pomodoros) * 25,
+                    tags: tags,
+                    syncToCalendar: false
+                )
+                todoStore.addItem(item)
+            }
+        }
+    }
+
+    private func parsedTagsField() -> [String] {
+        tagsField
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func aiNotes(parentTaskTitle: String, parentNotes: String, pomodoros: Int) -> String? {
+        let generatedSummary = localizationManager.format("tasks.ai_plan.generated_note", parentTaskTitle, pomodoros)
+        guard !parentNotes.isEmpty else {
+            return generatedSummary
+        }
+        return "\(generatedSummary)\n\(parentNotes)"
     }
 }
 

@@ -62,6 +62,42 @@ final class TodoStore: ObservableObject {
             planningStore?.upsertFromTask(updatedItem)
         }
     }
+
+    func addSubtask(to itemID: UUID, title: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty,
+              let index = items.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        items[index].subtasks.append(TodoSubtask(title: trimmedTitle))
+        items[index].modifiedAt = Date()
+        saveItems()
+        planningStore?.upsertFromTask(items[index])
+    }
+
+    func toggleSubtask(taskID: UUID, subtaskID: UUID) {
+        guard let itemIndex = items.firstIndex(where: { $0.id == taskID }),
+              let subtaskIndex = items[itemIndex].subtasks.firstIndex(where: { $0.id == subtaskID }) else {
+            return
+        }
+
+        items[itemIndex].subtasks[subtaskIndex].completed.toggle()
+        items[itemIndex].modifiedAt = Date()
+        saveItems()
+        planningStore?.upsertFromTask(items[itemIndex])
+    }
+
+    func deleteSubtask(taskID: UUID, subtaskID: UUID) {
+        guard let itemIndex = items.firstIndex(where: { $0.id == taskID }) else {
+            return
+        }
+
+        items[itemIndex].subtasks.removeAll { $0.id == subtaskID }
+        items[itemIndex].modifiedAt = Date()
+        saveItems()
+        planningStore?.upsertFromTask(items[itemIndex])
+    }
     
     // MARK: - Filtering
     

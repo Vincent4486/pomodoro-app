@@ -76,10 +76,9 @@ final class AuthManager {
         print("[Auth] Requested scopes: \(provider.scopes?.joined(separator: ", ") ?? "none")")
 
         do {
-            let credential = try await githubCredential(from: provider)
-            print("[Auth] OAuth returned credential")
-            print("[Auth] Signing into Firebase")
-            let authResult = try await signIn(with: credential)
+            print("[Auth] Calling Firebase federated sign-in for GitHub")
+            let authResult = try await signIn(with: provider)
+            print("[Auth] GitHub OAuth returned result")
             print("[Auth] GitHub sign-in succeeded for uid: \(authResult.user.uid)")
             activeOAuthProvider = nil
             return authResult.user.uid
@@ -127,35 +126,37 @@ final class AuthManager {
         }
     }
 
-    private func githubCredential(from provider: OAuthProvider) async throws -> AuthCredential {
-        let selector = NSSelectorFromString("getCredentialWithUIDelegate:completion:")
-        guard let method = class_getInstanceMethod(OAuthProvider.self, selector) else {
-            print("[Auth] GitHub OAuth selector not found: \(NSStringFromSelector(selector))")
+    private func signIn(with provider: OAuthProvider) async throws -> AuthDataResult {
+        let auth = Auth.auth()
+        let selector = NSSelectorFromString("signInWithProvider:UIDelegate:completion:")
+        guard let method = class_getInstanceMethod(Auth.self, selector) else {
+            print("[Auth] GitHub sign-in selector not found: \(NSStringFromSelector(selector))")
             throw AuthManagerError.missingResult
         }
 
-        typealias CredentialBlock = @convention(block) (AuthCredential?, Error?) -> Void
-        typealias CredentialFunction = @convention(c) (AnyObject, Selector, AnyObject?, CredentialBlock?) -> Void
+        typealias SignInBlock = @convention(block) (AuthDataResult?, Error?) -> Void
+        typealias SignInFunction = @convention(c) (AnyObject, Selector, AnyObject, AnyObject?, SignInBlock?) -> Void
         let implementation = method_getImplementation(method)
-        let function = unsafeBitCast(implementation, to: CredentialFunction.self)
+        let function = unsafeBitCast(implementation, to: SignInFunction.self)
 
         return try await withCheckedThrowingContinuation { continuation in
-            print("[Auth] Requesting GitHub OAuth credential")
-            let completion: CredentialBlock = { credential, error in
+            print("[Auth] Before GitHub OAuth browser handoff")
+            let completion: SignInBlock = { result, error in
+                print("[Auth] GitHub OAuth completion received")
                 if let error {
                     print("[Auth] GitHub auth error: \((error as NSError).localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
-                guard let credential else {
+                guard let result else {
                     print("[Auth] Authentication did not return a result")
                     continuation.resume(throwing: AuthManagerError.missingResult)
                     return
                 }
-                print("[Auth] Received GitHub OAuth credential of type: \(type(of: credential))")
-                continuation.resume(returning: credential)
+                print("[Auth] Firebase login success")
+                continuation.resume(returning: result)
             }
-            function(provider, selector, nil, completion)
+            function(auth, selector, provider, nil, completion)
         }
     }
 

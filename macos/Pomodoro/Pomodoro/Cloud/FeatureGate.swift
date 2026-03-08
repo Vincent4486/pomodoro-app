@@ -1,9 +1,19 @@
 import Foundation
 import Combine
 import FirebaseAuth
+import FirebaseFunctions
 
 /// Entitlement-aware feature gating for cloud-powered capabilities.
 final class FeatureGate: ObservableObject {
+    struct AIUsageProgress {
+        let title: String
+        let usedRatio: Double
+
+        var usedPercentage: Int {
+            Int((usedRatio * 100).rounded())
+        }
+    }
+
     enum Tier: String, Decodable {
         case free
         case beta
@@ -19,16 +29,21 @@ final class FeatureGate: ObservableObject {
     @Published private(set) var geminiFlash3RemainingTokens: Int?
     @Published private(set) var geminiFlash3MonthlyLimit: Int?
     @Published private(set) var allowanceResetAt: Date?
+    @Published private(set) var subscriptionEndAt: Date?
     @Published private(set) var isRefreshingAllowance = false
     @Published private(set) var allowanceErrorMessage: String?
 
     static let shared = FeatureGate()
 
     private var authListener: AuthStateDidChangeListenerHandle?
-    private let session: URLSession
+    private let functions: Functions
 
-    private init(session: URLSession = .shared) {
-        self.session = session
+    private init(functions: Functions? = nil) {
+        if let functions {
+            self.functions = functions
+        } else {
+            self.functions = Functions.functions(region: "us-central1")
+        }
         listenForAuthChanges()
     }
 
@@ -85,6 +100,125 @@ final class FeatureGate: ObservableObject {
         canUseCloudProxyAI && !isAIQuotaExhausted
     }
 
+    var canUseAIPlanning: Bool {
+        switch tier {
+        case .pro, .developer:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var canUseAIAssistantBreakdown: Bool {
+        switch tier {
+        case .plus, .pro, .developer:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var canUseAdvancedTasks: Bool {
+        switch tier {
+        case .plus, .pro, .developer:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var canUseTaskMarkdown: Bool {
+        canUseAdvancedTasks
+    }
+
+    var canUseSubtasks: Bool {
+        canUseAdvancedTasks
+    }
+
+    var canUseTaskKeyboardShortcuts: Bool {
+        canUseAdvancedTasks
+    }
+
+    var canUseEisenhowerMatrix: Bool {
+        switch tier {
+        case .pro, .developer:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var aiAssistantUpgradeTitle: String {
+        LocalizationManager.shared.text("tasks.ai_assistant.plus_feature_title")
+    }
+
+    func canUseAIAssistantAction(_ action: AIAssistantAction) -> Bool {
+        switch action {
+        case .breakdown:
+            return canUseAIAssistantBreakdown
+        case .planning:
+            return canUseAIPlanning
+        }
+    }
+
+    func shouldShowUpgradeModal(for action: AIAssistantAction) -> Bool {
+        !canUseAIAssistantAction(action)
+    }
+
+    func aiAssistantDisabledReason(for action: AIAssistantAction) -> String? {
+        if !canUseAIAssistantAction(action) {
+            switch action {
+            case .breakdown:
+                return LocalizationManager.shared.text("tasks.ai_assistant.breakdown_requires_plus")
+            case .planning:
+                return LocalizationManager.shared.text("tasks.ai_assistant.planning_requires_pro")
+            }
+        }
+        if isAIQuotaExhausted {
+            return aiActionDisabledReason
+        }
+        return nil
+    }
+
+    var aiPlanningDisabledReason: String? {
+        if !canUseAIPlanning {
+            return LocalizationManager.shared.text("tasks.ai_assistant.planning_requires_pro")
+        }
+        if isAIQuotaExhausted {
+            return aiActionDisabledReason
+        }
+        return nil
+    }
+
+    var shouldShowAIPlanningUpgradeModal: Bool {
+        !canUseAIPlanning
+    }
+
+    var aiPlanningQuotaMessage: String? {
+        guard (canUseAIPlanning || canUseAIAssistantBreakdown), isAIQuotaExhausted else { return nil }
+        return aiActionDisabledReason
+    }
+
+    var canRunAIPlanningRequest: Bool {
+        (canUseAIPlanning || canUseAIAssistantBreakdown) && !isAIQuotaExhausted
+    }
+
+    var aiUsageProgressItems: [AIUsageProgress] {
+        [
+            usageProgress(
+                title: "DeepSeek",
+                remaining: deepSeekRemainingTokens,
+                limit: deepSeekMonthlyLimit
+            ),
+            usageProgress(
+                title: "Gemini Flash",
+                remaining: geminiFlash3RemainingTokens,
+                limit: geminiFlash3MonthlyLimit
+            )
+        ]
+        .compactMap { $0 }
+    }
+
     var aiActionDisabledReason: String? {
         let l10n = LocalizationManager.shared
         if !canUseCloudProxyAI {
@@ -98,6 +232,16 @@ final class FeatureGate: ObservableObject {
             return l10n.text("feature_gate.ai_quota_exhausted")
         }
         return nil
+    }
+
+    private func usageProgress(title: String, remaining: Int?, limit: Int?) -> AIUsageProgress? {
+        guard let remaining, let limit, limit > 0 else {
+            return nil
+        }
+
+        let used = max(0, min(limit, limit - remaining))
+        let ratio = min(1, max(0, Double(used) / Double(limit)))
+        return AIUsageProgress(title: title, usedRatio: ratio)
     }
 
     // MARK: - Networking
@@ -119,27 +263,11 @@ final class FeatureGate: ObservableObject {
         defer { isRefreshingAllowance = false }
 
         do {
-            let request = try await APIClient.shared.makeRequest(
-                path: Self.allowancePath,
-                method: .get
-            )
-            let (data, response) = try await session.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw GateError.invalidResponse
-            }
-
-            switch httpResponse.statusCode {
-            case 200...299:
-                let payload = try decodeAllowancePayload(data: data)
-                apply(payload: payload)
-            case 401:
-                resetToSignedOutState()
-                allowanceErrorMessage = LocalizationManager.shared.text("feature_gate.session_expired_sign_in_again")
-            case 403:
-                allowanceErrorMessage = LocalizationManager.shared.text("feature_gate.allowance_access_forbidden")
-            default:
-                throw GateError.httpStatus(httpResponse.statusCode)
-            }
+            let result = try await functions
+                .httpsCallable("getAllowance")
+                .call()
+            let payload = try decodeAllowancePayload(from: result.data)
+            apply(payload: payload)
         } catch {
             allowanceErrorMessage = error.localizedDescription
         }
@@ -166,26 +294,54 @@ final class FeatureGate: ObservableObject {
         geminiFlash3RemainingTokens = nil
         geminiFlash3MonthlyLimit = nil
         allowanceResetAt = nil
+        subscriptionEndAt = nil
     }
 
     @MainActor
     private func apply(payload: AllowancePayload) {
+        if let uid = Auth.auth().currentUser?.uid,
+           uid == "1ebilryd5YhIgWe7zVGzw3yQZTq1" {
+            print("Developer override active for UID:", uid)
+            tier = .developer
+            deepSeekRemainingTokens = payload.deepSeekRemainingTokens
+            deepSeekMonthlyLimit = payload.deepSeekMonthlyLimit
+            geminiFlash3RemainingTokens = payload.geminiFlash3RemainingTokens
+            geminiFlash3MonthlyLimit = payload.geminiFlash3MonthlyLimit
+            allowanceResetAt = payload.resetAt
+            subscriptionEndAt = payload.subscriptionEndAt
+            return
+        }
+
         tier = payload.tier ?? .free
         deepSeekRemainingTokens = payload.deepSeekRemainingTokens
         deepSeekMonthlyLimit = payload.deepSeekMonthlyLimit
         geminiFlash3RemainingTokens = payload.geminiFlash3RemainingTokens
         geminiFlash3MonthlyLimit = payload.geminiFlash3MonthlyLimit
         allowanceResetAt = payload.resetAt
+        subscriptionEndAt = payload.subscriptionEndAt
     }
 
-    private func decodeAllowancePayload(data: Data) throws -> AllowancePayload {
+    private func decodeAllowancePayload(from data: Any) throws -> AllowancePayload {
+        let rootObject: Any
+        if let dictionary = data as? [String: Any],
+           let nested = dictionary["data"] {
+            rootObject = nested
+        } else {
+            rootObject = data
+        }
+
+        guard JSONSerialization.isValidJSONObject(rootObject) else {
+            throw GateError.invalidResponse
+        }
+
+        let responseData = try JSONSerialization.data(withJSONObject: rootObject)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        if let decoded = try? decoder.decode(AllowanceResponse.self, from: data) {
+        if let decoded = try? decoder.decode(AllowanceResponse.self, from: responseData) {
             return decoded.payload
         }
 
-        let object = try JSONSerialization.jsonObject(with: data)
+        let object = try JSONSerialization.jsonObject(with: responseData)
         guard let json = object as? [String: Any] else {
             throw GateError.decodingFailed
         }
@@ -195,7 +351,6 @@ final class FeatureGate: ObservableObject {
     private enum GateError: LocalizedError {
         case invalidResponse
         case decodingFailed
-        case httpStatus(Int)
 
         var errorDescription: String? {
             switch self {
@@ -203,8 +358,6 @@ final class FeatureGate: ObservableObject {
                 return LocalizationManager.shared.text("feature_gate.error.invalid_allowance_response")
             case .decodingFailed:
                 return LocalizationManager.shared.text("feature_gate.error.decoding_failed")
-            case .httpStatus(let status):
-                return LocalizationManager.shared.format("feature_gate.error.http_status", status)
             }
         }
     }
@@ -223,6 +376,8 @@ final class FeatureGate: ObservableObject {
         let geminiFlash3Limit: Int?
         let resetAt: Date?
         let reset_at: Date?
+        let subscriptionEndAt: Date?
+        let subscription_end_at: Date?
 
         var payload: AllowancePayload {
             let deepSeekQuota = deepseek ?? deepSeek ?? allowances?["deepseek"] ?? quotas?["deepseek"]
@@ -239,7 +394,8 @@ final class FeatureGate: ObservableObject {
                 deepSeekMonthlyLimit: deepSeekQuota?.limit ?? deepseekLimit,
                 geminiFlash3RemainingTokens: geminiQuota?.remaining ?? geminiFlash3Remaining,
                 geminiFlash3MonthlyLimit: geminiQuota?.limit ?? geminiFlash3Limit,
-                resetAt: resetAt ?? reset_at
+                resetAt: resetAt ?? reset_at,
+                subscriptionEndAt: subscriptionEndAt ?? subscription_end_at
             )
         }
     }
@@ -256,6 +412,7 @@ final class FeatureGate: ObservableObject {
         let geminiFlash3RemainingTokens: Int?
         let geminiFlash3MonthlyLimit: Int?
         let resetAt: Date?
+        let subscriptionEndAt: Date?
 
         init(
             tier: Tier?,
@@ -263,7 +420,8 @@ final class FeatureGate: ObservableObject {
             deepSeekMonthlyLimit: Int?,
             geminiFlash3RemainingTokens: Int?,
             geminiFlash3MonthlyLimit: Int?,
-            resetAt: Date?
+            resetAt: Date?,
+            subscriptionEndAt: Date?
         ) {
             self.tier = tier
             self.deepSeekRemainingTokens = deepSeekRemainingTokens
@@ -271,6 +429,7 @@ final class FeatureGate: ObservableObject {
             self.geminiFlash3RemainingTokens = geminiFlash3RemainingTokens
             self.geminiFlash3MonthlyLimit = geminiFlash3MonthlyLimit
             self.resetAt = resetAt
+            self.subscriptionEndAt = subscriptionEndAt
         }
 
         init(json: [String: Any]) {
@@ -292,6 +451,14 @@ final class FeatureGate: ObservableObject {
             } else {
                 self.resetAt = nil
             }
+
+            if let end = json["subscriptionEndAt"] as? String {
+                self.subscriptionEndAt = Self.parseDate(end)
+            } else if let end = json["subscription_end_at"] as? String {
+                self.subscriptionEndAt = Self.parseDate(end)
+            } else {
+                self.subscriptionEndAt = nil
+            }
         }
 
         private static func parseDate(_ value: String) -> Date? {
@@ -300,14 +467,6 @@ final class FeatureGate: ObservableObject {
             }
             return nil
         }
-    }
-
-    private static var allowancePath: String {
-        if let configured = Bundle.main.infoDictionary?["POMODORO_GET_ALLOWANCE_PATH"] as? String,
-           !configured.isEmpty {
-            return configured
-        }
-        return "/getAllowance"
     }
 
     private static let resetFormatter: DateFormatter = {

@@ -11,7 +11,7 @@ final class PlanningStore: ObservableObject {
     private let storageKey = "com.pomodoro.planningItems"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let eventStore = EKEventStore()
+    private let eventStore = SharedEventStore.shared.eventStore
     
     init() {
         load()

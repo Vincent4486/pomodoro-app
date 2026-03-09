@@ -4,6 +4,13 @@ import Combine
 import EventKit
 import UserNotifications
 
+final class SharedEventStore {
+    static let shared = SharedEventStore()
+    let eventStore = EKEventStore()
+
+    private init() {}
+}
+
 /// Centralized permissions manager for Notifications, Calendar, and Reminders.
 /// Provides authorization status checks and system settings opening.
 @MainActor
@@ -21,7 +28,7 @@ final class PermissionsManager: ObservableObject {
     @Published var showCalendarDeniedAlert = false
     @Published var showRemindersDeniedAlert = false
     
-    private let eventStore = EKEventStore()
+    private let eventStore = SharedEventStore.shared.eventStore
     private let notificationCenter = UNUserNotificationCenter.current()
     
     private init() {

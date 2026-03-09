@@ -39,6 +39,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     /// Optional identifiers for system sync mirrors
     var reminderIdentifier: String?
     var calendarEventIdentifier: String?
+    var lastSyncedAt: Date?
     
     enum SyncStatus: String, Codable {
         case local
@@ -49,7 +50,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var syncStatus: SyncStatus
     
     enum CodingKeys: String, CodingKey {
-        case id, externalId, title, notes, descriptionMarkdown, isCompleted, dueDate, hasDueTime, durationMinutes, priority, subtasks, createdAt, modifiedAt, tags, syncToCalendar, linkedCalendarEventId, reminderIdentifier, calendarEventIdentifier, syncStatus
+        case id, externalId, title, notes, descriptionMarkdown, isCompleted, dueDate, hasDueTime, durationMinutes, priority, subtasks, createdAt, modifiedAt, tags, syncToCalendar, linkedCalendarEventId, reminderIdentifier, calendarEventIdentifier, lastSyncedAt, syncStatus
     }
     
     enum Priority: Int, Codable, CaseIterable {
@@ -87,6 +88,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         linkedCalendarEventId: String? = nil,
         reminderIdentifier: String? = nil,
         calendarEventIdentifier: String? = nil,
+        lastSyncedAt: Date? = nil,
         syncStatus: SyncStatus = .local
     ) {
         self.id = id
@@ -106,6 +108,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.linkedCalendarEventId = linkedCalendarEventId
         self.reminderIdentifier = reminderIdentifier
         self.calendarEventIdentifier = calendarEventIdentifier
+        self.lastSyncedAt = lastSyncedAt
         self.syncStatus = syncStatus
     }
     
@@ -134,6 +137,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         linkedCalendarEventId = try container.decodeIfPresent(String.self, forKey: .linkedCalendarEventId)
         reminderIdentifier = try container.decodeIfPresent(String.self, forKey: .reminderIdentifier)
         calendarEventIdentifier = try container.decodeIfPresent(String.self, forKey: .calendarEventIdentifier)
+        lastSyncedAt = try container.decodeIfPresent(Date.self, forKey: .lastSyncedAt)
         syncStatus = try container.decodeIfPresent(SyncStatus.self, forKey: .syncStatus) ?? .local
     }
     
@@ -161,6 +165,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(linkedCalendarEventId, forKey: .linkedCalendarEventId)
         try container.encodeIfPresent(reminderIdentifier, forKey: .reminderIdentifier)
         try container.encodeIfPresent(calendarEventIdentifier, forKey: .calendarEventIdentifier)
+        try container.encodeIfPresent(lastSyncedAt, forKey: .lastSyncedAt)
         try container.encode(syncStatus, forKey: .syncStatus)
     }
     

@@ -6,7 +6,7 @@ import EventKit
 /// Calendar is a separate feature from Todo/Reminders.
 @MainActor
 final class CalendarManager: ObservableObject {
-    private let eventStore = EKEventStore()
+    private let eventStore = SharedEventStore.shared.eventStore
     private let permissionsManager: PermissionsManager
     
     @Published var events: [EKEvent] = []

@@ -69,7 +69,7 @@ final class AppState: ObservableObject {
     private var currentFocusDurationSeconds: Int?
     private var currentBreakDurationSeconds: Int?
     private var hasRequestedNotificationAuthorization: Bool = false
-    private let eventStore = EKEventStore()
+    private let eventStore = SharedEventStore.shared.eventStore
 
     // Designated initializer - no default arguments to avoid linker symbol issues
     @MainActor

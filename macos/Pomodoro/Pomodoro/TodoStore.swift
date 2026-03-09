@@ -7,6 +7,8 @@ import SwiftUI
 @MainActor
 final class TodoStore: ObservableObject {
     @Published var items: [TodoItem] = []
+    @Published private(set) var pendingItems: [TodoItem] = []
+    @Published private(set) var completedItems: [TodoItem] = []
     
     private let storageKey = "com.pomodoro.todoItems"
     private let encoder = JSONEncoder()
@@ -27,6 +29,7 @@ final class TodoStore: ObservableObject {
     func addItem(_ item: TodoItem) {
         items.append(item)
         saveItems()
+        rebuildDerivedState()
         planningStore?.upsertFromTask(item)
     }
     
@@ -34,6 +37,7 @@ final class TodoStore: ObservableObject {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index] = item
             saveItems()
+            rebuildDerivedState()
             planningStore?.upsertFromTask(item)
         }
     }
@@ -41,6 +45,7 @@ final class TodoStore: ObservableObject {
     func deleteItem(_ item: TodoItem) {
         items.removeAll { $0.id == item.id }
         saveItems()
+        rebuildDerivedState()
         planningStore?.removeTaskPlan(for: item.id)
     }
     
@@ -48,6 +53,7 @@ final class TodoStore: ObservableObject {
         let removedIDs: [UUID] = offsets.map { items[$0].id }
         items.remove(atOffsets: offsets)
         saveItems()
+        rebuildDerivedState()
         for id in removedIDs {
             planningStore?.removeTaskPlan(for: id)
         }
@@ -59,6 +65,7 @@ final class TodoStore: ObservableObject {
             updatedItem.markComplete(!updatedItem.isCompleted)
             items[index] = updatedItem
             saveItems()
+            rebuildDerivedState()
             planningStore?.upsertFromTask(updatedItem)
         }
     }
@@ -73,6 +80,7 @@ final class TodoStore: ObservableObject {
         items[index].subtasks.append(TodoSubtask(title: trimmedTitle))
         items[index].modifiedAt = Date()
         saveItems()
+        rebuildDerivedState()
         planningStore?.upsertFromTask(items[index])
     }
 
@@ -85,6 +93,7 @@ final class TodoStore: ObservableObject {
         items[itemIndex].subtasks[subtaskIndex].completed.toggle()
         items[itemIndex].modifiedAt = Date()
         saveItems()
+        rebuildDerivedState()
         planningStore?.upsertFromTask(items[itemIndex])
     }
 
@@ -96,17 +105,8 @@ final class TodoStore: ObservableObject {
         items[itemIndex].subtasks.removeAll { $0.id == subtaskID }
         items[itemIndex].modifiedAt = Date()
         saveItems()
+        rebuildDerivedState()
         planningStore?.upsertFromTask(items[itemIndex])
-    }
-    
-    // MARK: - Filtering
-    
-    var pendingItems: [TodoItem] {
-        items.filter { !$0.isCompleted }
-    }
-    
-    var completedItems: [TodoItem] {
-        items.filter { $0.isCompleted }
     }
     
     var itemsWithRemindersSync: [TodoItem] {
@@ -125,8 +125,18 @@ final class TodoStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let decoded = try? decoder.decode([TodoItem].self, from: data) {
             items = decoded
+            rebuildDerivedState()
             planningStore?.syncTasks(items)
+        } else {
+            rebuildDerivedState()
         }
+    }
+
+    private func rebuildDerivedState() {
+        pendingItems = items.filter { !$0.isCompleted }
+        completedItems = items
+            .filter { $0.isCompleted }
+            .sorted { $0.modifiedAt > $1.modifiedAt }
     }
     
     // MARK: - Reminders Integration
@@ -137,6 +147,7 @@ final class TodoStore: ObservableObject {
             items[index].reminderIdentifier = remindersId
             items[index].syncStatus = .synced
             saveItems()
+            rebuildDerivedState()
         }
     }
     
@@ -146,6 +157,7 @@ final class TodoStore: ObservableObject {
             items[index].reminderIdentifier = nil
             items[index].syncStatus = .local
             saveItems()
+            rebuildDerivedState()
         }
     }
     
@@ -154,6 +166,7 @@ final class TodoStore: ObservableObject {
             items[index].calendarEventIdentifier = eventId
             items[index].syncStatus = .synced
             saveItems()
+            rebuildDerivedState()
             planningStore?.upsertFromTask(items[index])
         }
     }
@@ -163,6 +176,7 @@ final class TodoStore: ObservableObject {
             items[index].calendarEventIdentifier = nil
             items[index].syncStatus = .local
             saveItems()
+            rebuildDerivedState()
             planningStore?.upsertFromTask(items[index])
         }
     }

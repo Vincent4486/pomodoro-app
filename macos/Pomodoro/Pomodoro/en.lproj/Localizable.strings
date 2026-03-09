@@ -307,7 +307,7 @@
 "tasks.subtitle" = "Your task list with optional Reminders sync";
 "tasks.sync.auto_failed_format" = "Auto-sync (%1$@) failed: %2$@";
 "tasks.sync.auto_requires_reminders_access" = "Auto-sync requires Reminders access.";
-"tasks.sync_all_tasks" = "Sync All Tasks";
+"tasks.sync_all_tasks" = "Sync All";
 "tasks.syncing" = "Syncing…";
 "tasks.title" = "Tasks";
 "tasks.unplanned" = "Unplanned";

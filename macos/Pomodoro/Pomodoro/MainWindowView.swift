@@ -34,7 +34,7 @@ struct MainWindowView: View {
     @State private var weeklyFocusPoints: [DailyFocusPoint] = []
     @State private var todayFocusMinutes: Int = 0
     @State private var completionRate: Double = 0
-    private let eventStore = EKEventStore()
+    private let eventStore = SharedEventStore.shared.eventStore
     @State private var lastNonFlowSelection: SidebarItem = .pomodoro
     // Slider micro-interactions
     @State private var ambientSliderEditing = false
@@ -534,138 +534,215 @@ struct MainWindowView: View {
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(.primary)
 
-            switch audioSourceStore.audioSource {
-            case .external(let media):
+            if appState.nowPlayingRouter.isAvailable {
                 HStack(alignment: .center, spacing: 14) {
-                    externalArtwork(media)
+                    externalArtwork(
+                        ExternalMedia(
+                            title: appState.nowPlayingRouter.title,
+                            artist: appState.nowPlayingRouter.artist,
+                            album: nil,
+                            artwork: appState.nowPlayingRouter.artwork,
+                            source: .unknown
+                        )
+                    )
                         .frame(width: 64, height: 64)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(media.title)
+                        Text(appState.nowPlayingRouter.title)
                             .font(.system(.title3, design: .rounded).weight(.semibold))
                             .lineLimit(1)
-                        Text(media.artist)
+                        Text(appState.nowPlayingRouter.artist)
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                        Text(media.source.displayName)
+                        Text(appState.nowPlayingRouter.sourceName)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
 
                     Spacer()
 
-                    Button {
-                        audioSourceStore.togglePlayPause()
-                    } label: {
-                        Image(systemName: "playpause.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .frame(width: 42, height: 42)
-                            .foregroundStyle(.white)
-                            .background(Circle().fill(Color.accentColor))
-                    }
-                    .buttonStyle(.plain)
+                    HStack(spacing: 10) {
+                        Button {
+                            appState.nowPlayingRouter.previousTrack()
+                        } label: {
+                            Image(systemName: "backward.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: 34, height: 34)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(!appState.nowPlayingRouter.isAvailable)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(languageManager.text("audio.volume.system"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Slider(value: .constant(Double(musicController.focusVolume)), in: 0...1, onEditingChanged: { _ in })
-                            .disabled(true)
-                            // Soft hover feedback without altering layout or color palette.
-                            .opacity(systemSliderHover ? 1.0 : 0.92)
+                        Button {
+                            appState.nowPlayingRouter.playPause()
+                        } label: {
+                            Image(systemName: appState.nowPlayingRouter.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .frame(width: 42, height: 42)
+                                .foregroundStyle(.white)
+                                .background(Circle().fill(Color.accentColor))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!appState.nowPlayingRouter.isAvailable)
+
+                        Button {
+                            appState.nowPlayingRouter.nextTrack()
+                        } label: {
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: 34, height: 34)
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(!appState.nowPlayingRouter.isAvailable)
+                    }
+                }
+            } else {
+                switch audioSourceStore.audioSource {
+                case .ambient(let type):
+                    HStack(alignment: .center, spacing: 14) {
+                        ambientIcon(for: type)
+                            .font(.system(size: 30, weight: .semibold))
+                            .frame(width: 64, height: 64)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.primary.opacity(0.08))
+                            )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(type.displayName)
+                                .font(.system(.title3, design: .rounded).weight(.semibold))
+                            Text(languageManager.text("audio.ambient_local"))
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            audioSourceStore.togglePlayPause()
+                        } label: {
+                            Image(systemName: musicController.playbackState == .playing ? "pause.fill" : "play.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .frame(width: 42, height: 42)
+                                .foregroundStyle(.white)
+                                .background(Circle().fill(Color.accentColor))
+                        }
+                        .buttonStyle(.plain)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(languageManager.text("audio.volume"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Slider(value: ambientVolumeBinding, in: 0...1, onEditingChanged: { editing in
+                                if reduceMotion {
+                                    ambientSliderEditing = editing
+                                } else {
+                                    withAnimation(.easeOut(duration: 0.2)) { ambientSliderEditing = editing }
+                                }
+                            })
+                            // Smooth fill animation to avoid abrupt jumps.
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: musicController.focusVolume)
+                            // Tactile scale while dragging; small enough to avoid layout shift.
+                            .scaleEffect(ambientSliderEditing ? 1.03 : 1.0, anchor: .center)
+                            // Subtle hover lift in line with macOS controls.
+                            .opacity((ambientSliderHover || ambientSliderEditing) ? 1.0 : 0.95)
                             .onHover { hovering in
                                 if reduceMotion {
-                                    systemSliderHover = hovering
+                                    ambientSliderHover = hovering
                                 } else {
-                                    withAnimation(.easeOut(duration: 0.18)) { systemSliderHover = hovering }
+                                    withAnimation(.easeOut(duration: 0.18)) { ambientSliderHover = hovering }
                                 }
                             }
-                    }
-                    .frame(width: 200)
-                }
-
-            case .ambient(let type):
-                HStack(alignment: .center, spacing: 14) {
-                    ambientIcon(for: type)
-                        .font(.system(size: 30, weight: .semibold))
-                        .frame(width: 64, height: 64)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.primary.opacity(0.08))
-                        )
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(type.displayName)
-                            .font(.system(.title3, design: .rounded).weight(.semibold))
-                        Text(languageManager.text("audio.ambient_local"))
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        audioSourceStore.togglePlayPause()
-                    } label: {
-                        Image(systemName: musicController.playbackState == .playing ? "pause.fill" : "play.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .frame(width: 42, height: 42)
-                            .foregroundStyle(.white)
-                            .background(Circle().fill(Color.accentColor))
-                    }
-                    .buttonStyle(.plain)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(languageManager.text("audio.volume"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Slider(value: ambientVolumeBinding, in: 0...1, onEditingChanged: { editing in
-                            if reduceMotion {
-                                ambientSliderEditing = editing
-                            } else {
-                                withAnimation(.easeOut(duration: 0.2)) { ambientSliderEditing = editing }
-                            }
-                        })
-                        // Smooth fill animation to avoid abrupt jumps.
-                        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: musicController.focusVolume)
-                        // Tactile scale while dragging; small enough to avoid layout shift.
-                        .scaleEffect(ambientSliderEditing ? 1.03 : 1.0, anchor: .center)
-                        // Subtle hover lift in line with macOS controls.
-                        .opacity((ambientSliderHover || ambientSliderEditing) ? 1.0 : 0.95)
-                        .onHover { hovering in
-                            if reduceMotion {
-                                ambientSliderHover = hovering
-                            } else {
-                                withAnimation(.easeOut(duration: 0.18)) { ambientSliderHover = hovering }
-                            }
                         }
+                        .frame(width: 200)
                     }
-                    .frame(width: 200)
-                }
 
-            case .off:
-                HStack(alignment: .center, spacing: 14) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.secondary.opacity(0.15))
+                case .external(let media):
+                    HStack(alignment: .center, spacing: 14) {
+                        externalArtwork(media)
                             .frame(width: 64, height: 64)
-                        Image(systemName: "waveform")
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(.secondary)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(media.title)
+                                .font(.system(.title3, design: .rounded).weight(.semibold))
+                                .lineLimit(1)
+                            Text(media.artist)
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Text(media.source.displayName)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            audioSourceStore.togglePlayPause()
+                        } label: {
+                            Image(systemName: "playpause.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .frame(width: 42, height: 42)
+                                .foregroundStyle(.white)
+                                .background(Circle().fill(Color.accentColor))
+                        }
+                        .buttonStyle(.plain)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(languageManager.text("audio.volume.system"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Slider(value: .constant(Double(musicController.focusVolume)), in: 0...1, onEditingChanged: { _ in })
+                                .disabled(true)
+                                // Soft hover feedback without altering layout or color palette.
+                                .opacity(systemSliderHover ? 1.0 : 0.92)
+                                .onHover { hovering in
+                                    if reduceMotion {
+                                        systemSliderHover = hovering
+                                    } else {
+                                        withAnimation(.easeOut(duration: 0.18)) { systemSliderHover = hovering }
+                                    }
+                                }
+                        }
+                        .frame(width: 200)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(languageManager.text("audio.none_playing"))
-                            .font(.system(.title3, design: .rounded).weight(.semibold))
-                        Text(languageManager.text("audio.start_external_hint"))
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
+                case .off:
+                    HStack(alignment: .center, spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.secondary.opacity(0.15))
+                                .frame(width: 64, height: 64)
+                            Image(systemName: "music.note")
+                                .font(.system(size: 26, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
 
-                    Spacer()
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("No media playing")
+                                .font(.system(.title3, design: .rounded).weight(.semibold))
+                            Text(languageManager.text("audio.start_external_hint"))
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 10) {
+                            Image(systemName: "backward.fill")
+                            Image(systemName: "play.fill")
+                            Image(systemName: "forward.fill")
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .opacity(0.5)
+                    }
                 }
             }
+        }
+        .onAppear {
+            appState.nowPlayingRouter.startPollingIfNeeded()
         }
     }
 
@@ -722,6 +799,7 @@ struct MainWindowView: View {
     }
 
     private var externalActive: Bool {
+        if appState.nowPlayingRouter.isAvailable { return true }
         if case .external = audioSourceStore.audioSource { return true }
         return false
     }

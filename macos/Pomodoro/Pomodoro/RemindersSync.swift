@@ -60,7 +60,8 @@ final class RemindersSync: ObservableObject {
         defer { isSyncing = false }
         
         do {
-            try await syncEngine.syncTasksWithReminders()
+            let reminderId = try await syncEngine.syncReminder(for: item)
+            todoStore?.linkToReminder(itemId: item.id, remindersId: reminderId)
             lastSyncError = nil
             lastSyncDate = Date()
             resetAutoSyncBackoff()
@@ -76,7 +77,7 @@ final class RemindersSync: ObservableObject {
         defer { isSyncing = false }
         
         do {
-            try await syncEngine.syncAll()
+            try await syncEngine.syncTasksWithReminders()
             lastSyncError = nil
             lastSyncDate = Date()
             resetAutoSyncBackoff()

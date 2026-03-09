@@ -12,11 +12,12 @@ final class SyncEngine {
     private let eventStore: EKEventStore
     private let permissionsManager: PermissionsManager
     private weak var todoStore: TodoStore?
+    private let syncLoopProtectionWindow: TimeInterval = 2
     
-    init(permissionsManager: PermissionsManager, todoStore: TodoStore? = nil, eventStore: EKEventStore = EKEventStore()) {
+    init(permissionsManager: PermissionsManager, todoStore: TodoStore? = nil, eventStore: EKEventStore? = nil) {
         self.permissionsManager = permissionsManager
         self.todoStore = todoStore
-        self.eventStore = eventStore
+        self.eventStore = eventStore ?? SharedEventStore.shared.eventStore
     }
     
     func attachTodoStore(_ store: TodoStore) {
@@ -30,103 +31,100 @@ final class SyncEngine {
     
     func syncTasksWithReminders() async throws {
         let start = Date()
-        var stats = SyncStats()
-        print("[SyncEngine] Reminders sync start at \(start)")
-        
+        print("[SyncEngine] Reminders sync-all start at \(start)")
         try await ensureRemindersAccess()
         guard let store = todoStore else { return }
+        let calendar = try reminderCalendar()
+        var failureMessages: [String] = []
         
-        let reminders = await fetchAllReminders()
-        stats.read = reminders.count
-        
-        var reminderMap: [String: EKReminder] = [:]
-        reminders.forEach { reminder in
-            if let parsed = ExternalID.parse(from: reminder.notes), parsed.externalId.hasPrefix(ExternalID.taskPrefix) {
-                reminderMap[parsed.externalId] = reminder
-            } else {
-                // External/unknown reminder without Pomodoro externalId:
-                // treat as outside task scope; do not import or create tasks.
-                stats.skipped += 1
-            }
+        do {
+            try await reverseSyncReminders(in: calendar, store: store)
+        } catch {
+            let message = "Reverse sync failed: \(error.localizedDescription)"
+            print("[SyncEngine][Reminders] \(message)")
+            failureMessages.append(message)
         }
-        
-        // Remote -> Local reconciliation
-        for (externalId, reminder) in reminderMap {
-            let remoteModified = reminder.lastModifiedDate ?? reminder.creationDate ?? .distantPast
-            let cleanNotes = ExternalID.parse(from: reminder.notes)?.cleanNotes
-            
-            if var local = store.items.first(where: { $0.externalId == externalId }) {
-                if remoteModified > local.lastModified {
-                    local.title = reminder.title
-                    local.notes = cleanNotes
-                    local.isCompleted = reminder.isCompleted
-                    if let comps = reminder.dueDateComponents,
-                       let date = Calendar.current.date(from: comps) {
-                        local.dueDate = date
-                        local.hasDueTime = comps.hasTimeComponents
-                    }
-                    local.reminderIdentifier = reminder.calendarItemIdentifier
-                    local.lastModified = remoteModified
-                    store.updateItem(local)
-                    print("[SyncEngine][Reminders] remote wins for \(externalId)")
-                    stats.written += 1
-                } else {
-                    print("[SyncEngine][Reminders] local wins for \(externalId)")
-                }
-            } else if let uuid = uuid(from: externalId, expectedPrefix: ExternalID.taskPrefix) {
-                let newTask = TodoItem(
-                    id: uuid,
-                    externalId: externalId,
-                    title: reminder.title,
-                    notes: cleanNotes,
-                    isCompleted: reminder.isCompleted,
-                    dueDate: reminder.dueDateComponents.flatMap { Calendar.current.date(from: $0) },
-                    hasDueTime: reminder.dueDateComponents?.hasTimeComponents ?? false,
-                    durationMinutes: nil,
-                    priority: .none,
-                    createdAt: reminder.creationDate ?? Date(),
-                    modifiedAt: remoteModified,
-                    tags: [],
-                    reminderIdentifier: reminder.calendarItemIdentifier,
-                    calendarEventIdentifier: nil,
-                    syncStatus: .synced
-                )
-                store.addItem(newTask)
-                stats.written += 1
-            }
-        }
-        
-        // Local -> Remote creation/update
+
         for item in store.items {
-            var task = item
-            if task.externalId.isEmpty {
-                task.externalId = ExternalID.taskId(for: task.id)
-                store.updateItem(task)
-            }
-            
-            guard task.durationMinutes == nil else { continue } // handled via calendar sync
-            guard task.dueDate != nil else { continue } // preserve prior behavior
-            
-            if let reminder = reminderMap[task.externalId] {
-                try updateReminder(reminder, with: task)
-                var updated = task
-                updated.lastModified = Date()
-                store.updateItem(updated)
-                print("[SyncEngine][Reminders] pushed local to remote for \(task.externalId)")
-                stats.written += 1
-            } else {
-                let reminderId = try createReminder(from: task)
-                var updated = task
-                updated.reminderIdentifier = reminderId
-                updated.lastModified = Date()
-                store.updateItem(updated)
-                print("[SyncEngine][Reminders] created remote for \(task.externalId)")
-                stats.written += 1
+            guard item.durationMinutes == nil else { continue }
+            do {
+                _ = try await syncReminder(for: item, calendar: calendar)
+            } catch {
+                let message = "Failed to sync task '\(item.title)': \(error.localizedDescription)"
+                print("[SyncEngine][Reminders] \(message)")
+                failureMessages.append(message)
             }
         }
-        
+
         let duration = Date().timeIntervalSince(start)
-        print("[SyncEngine] Reminders sync end. read: \(stats.read) written: \(stats.written) skipped: \(stats.skipped) duration: \(String(format: "%.2f", duration))s")
+        print("[SyncEngine] Reminders sync-all end. failed: \(failureMessages.count) duration: \(String(format: "%.2f", duration))s")
+
+        if let firstFailure = failureMessages.first {
+            throw SyncError.partialReminderSyncFailed(firstFailure)
+        }
+    }
+
+    func syncReminder(for item: TodoItem) async throws -> String {
+        let calendar = try reminderCalendar()
+        return try await syncReminder(for: item, calendar: calendar)
+    }
+
+    func testReminderCreation() async {
+        print("[SyncEngine][RemindersTest] Starting test reminder creation")
+
+        do {
+            try await ensureRemindersAccess()
+            let calendar = try reminderCalendar()
+            print("[SyncEngine][RemindersTest] permission status: \(permissionsManager.remindersStatusText)")
+            print("[SyncEngine][RemindersTest] using calendar: \(calendar.title)")
+
+            let reminder = EKReminder(eventStore: eventStore)
+            reminder.title = "Pomodoro Test Reminder"
+            reminder.notes = "EventKit connectivity test"
+            reminder.calendar = calendar
+            reminder.priority = 0
+
+            do {
+                try eventStore.save(reminder, commit: true)
+                print("[SyncEngine][RemindersTest] Test reminder created successfully")
+            } catch {
+                print("[SyncEngine][RemindersTest] Test reminder failed: \(error)")
+            }
+        } catch {
+            print("[SyncEngine][RemindersTest] Setup failed: \(error)")
+        }
+    }
+
+    private func syncReminder(for item: TodoItem, calendar: EKCalendar) async throws -> String {
+        let start = Date()
+        print("[SyncEngine][Reminders] Sync start for task '\(item.title)' at \(start)")
+        try await ensureRemindersAccess()
+        guard !shouldSkipLoopProtectedImport(for: item) else {
+            print("[SyncEngine][Reminders] Skipping outbound sync for '\(item.title)' due to loop protection")
+            return item.reminderIdentifier ?? ""
+        }
+
+        let existing = existingReminder(for: item)
+        let reminder = existing ?? EKReminder(eventStore: eventStore)
+
+        print("[SyncEngine][Reminders] permission status: \(permissionsManager.remindersStatusText)")
+        print("[SyncEngine][Reminders] using calendar: \(calendar.title)")
+        print("[SyncEngine][Reminders] \(existing == nil ? "Creating" : "Updating") reminder: \(item.title)")
+
+        reminder.calendar = calendar
+        applyReminderFields(to: reminder, from: item)
+
+        do {
+            try eventStore.save(reminder, commit: true)
+            print("[SyncEngine][Reminders] save result: success for '\(item.title)'")
+            markTaskSynced(itemId: item.id, reminderIdentifier: reminder.calendarItemIdentifier)
+            let duration = Date().timeIntervalSince(start)
+            print("[SyncEngine][Reminders] sync end for '\(item.title)' in \(String(format: "%.2f", duration))s")
+            return reminder.calendarItemIdentifier
+        } catch {
+            print("[SyncEngine][Reminders] save result: failed for '\(item.title)' error: \(error)")
+            throw SyncError.reminderSaveFailed(item.title, error.localizedDescription)
+        }
     }
     
     func syncCalendarEvents() async throws {
@@ -240,40 +238,123 @@ final class SyncEngine {
             }
         }
     }
+
+    private func fetchReminders(in calendar: EKCalendar) async -> [EKReminder] {
+        let predicate = eventStore.predicateForReminders(in: [calendar])
+        return await withCheckedContinuation { continuation in
+            eventStore.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: reminders ?? [])
+            }
+        }
+    }
     
     private func createReminder(from item: TodoItem) throws -> String {
         let reminder = EKReminder(eventStore: eventStore)
-        reminder.title = item.title
-        reminder.notes = combinedNotes(from: item.notes, tags: item.tags, externalId: item.externalId)
-        reminder.isCompleted = item.isCompleted
-        reminder.dueDateComponents = reminderComponents(from: item)
-        reminder.priority = reminderPriority(from: item.priority)
-        reminder.calendar = eventStore.defaultCalendarForNewReminders()
-        
+        applyReminderFields(to: reminder, from: item)
+        reminder.calendar = try reminderCalendar()
         try eventStore.save(reminder, commit: true)
         return reminder.calendarItemIdentifier
     }
     
     private func updateReminder(_ reminder: EKReminder, with item: TodoItem) throws {
-        reminder.title = item.title
-        reminder.notes = combinedNotes(from: item.notes, tags: item.tags, externalId: item.externalId)
-        reminder.isCompleted = item.isCompleted
-        reminder.dueDateComponents = reminderComponents(from: item)
-        reminder.priority = reminderPriority(from: item.priority)
+        if reminder.calendar == nil {
+            reminder.calendar = try reminderCalendar()
+        }
+        applyReminderFields(to: reminder, from: item)
         try eventStore.save(reminder, commit: true)
     }
-    
-    private func reminderPriority(from todoPriority: TodoItem.Priority) -> Int {
-        switch todoPriority {
-        case .none:
-            return 0
-        case .low:
-            return 9
-        case .medium:
-            return 5
-        case .high:
-            return 1
+
+    private func applyReminderFields(to reminder: EKReminder, from item: TodoItem) {
+        reminder.title = item.title
+        reminder.notes = reminderNotes(from: item)
+        reminder.isCompleted = item.isCompleted
+        reminder.dueDateComponents = reminderComponents(from: item)
+        reminder.priority = 0
+    }
+
+    private func reminderCalendar() throws -> EKCalendar {
+        print("[SyncEngine][Reminders] selecting default reminders calendar")
+        if let defaultCalendar = eventStore.defaultCalendarForNewReminders() {
+            return defaultCalendar
         }
+        print("[SyncEngine][Reminders] no default reminders calendar available")
+        throw SyncError.noReminderCalendar
+    }
+
+    private func reminderNotes(from item: TodoItem) -> String {
+        item.notes ?? ""
+    }
+
+    private func existingReminder(for item: TodoItem) -> EKReminder? {
+        guard let reminderIdentifier = item.reminderIdentifier else { return nil }
+        return eventStore.calendarItem(withIdentifier: reminderIdentifier) as? EKReminder
+    }
+
+    private func reverseSyncReminders(in calendar: EKCalendar, store: TodoStore) async throws {
+        print("[SyncEngine][Reminders] Reverse sync start for calendar: \(calendar.title)")
+        let reminders = await fetchReminders(in: calendar)
+        print("[SyncEngine][Reminders] Reverse sync fetched \(reminders.count) reminders")
+
+        for reminder in reminders {
+            let reminderTitle = reminder.title ?? "Untitled Reminder"
+            print("[SyncEngine][Reminders] Importing reminder: \(reminderTitle)")
+
+            if let local = store.items.first(where: { $0.reminderIdentifier == reminder.calendarItemIdentifier }) {
+                if shouldSkipLoopProtectedImport(for: local) {
+                    print("[SyncEngine][Reminders] Skipping import for '\(reminderTitle)' due to loop protection")
+                    continue
+                }
+
+                var updated = local
+                updated.title = reminderTitle
+                updated.notes = cleanedReminderNotes(reminder.notes)
+                updated.isCompleted = reminder.isCompleted
+                updated.dueDate = reminder.dueDateComponents.flatMap { Calendar.current.date(from: $0) }
+                updated.hasDueTime = reminder.dueDateComponents?.hasTimeComponents ?? false
+                updated.lastModified = reminder.lastModifiedDate ?? reminder.creationDate ?? Date()
+                updated.reminderIdentifier = reminder.calendarItemIdentifier
+                updated.lastSyncedAt = Date()
+                updated.syncStatus = .synced
+                store.updateItem(updated)
+                print("[SyncEngine][Reminders] Updated local task from reminder: \(reminderTitle)")
+            } else {
+                let newTask = TodoItem(
+                    title: reminderTitle,
+                    notes: cleanedReminderNotes(reminder.notes),
+                    isCompleted: reminder.isCompleted,
+                    dueDate: reminder.dueDateComponents.flatMap { Calendar.current.date(from: $0) },
+                    hasDueTime: reminder.dueDateComponents?.hasTimeComponents ?? false,
+                    reminderIdentifier: reminder.calendarItemIdentifier,
+                    lastSyncedAt: Date(),
+                    syncStatus: .synced
+                )
+                store.addItem(newTask)
+                print("[SyncEngine][Reminders] Created local task from reminder: \(reminderTitle)")
+            }
+        }
+    }
+
+    private func cleanedReminderNotes(_ notes: String?) -> String? {
+        guard let notes, !notes.isEmpty else { return nil }
+        return notes
+    }
+
+    private func shouldSkipLoopProtectedImport(for item: TodoItem) -> Bool {
+        guard let lastSyncedAt = item.lastSyncedAt else { return false }
+        return Date().timeIntervalSince(lastSyncedAt) < syncLoopProtectionWindow
+    }
+
+    private func markTaskSynced(itemId: UUID, reminderIdentifier: String) {
+        guard let store = todoStore,
+              let existing = store.items.first(where: { $0.id == itemId }) else {
+            return
+        }
+        var updated = existing
+        updated.reminderIdentifier = reminderIdentifier
+        updated.lastSyncedAt = Date()
+        updated.lastModified = Date()
+        updated.syncStatus = .synced
+        store.updateItem(updated)
     }
     
     // MARK: - Calendar Helpers
@@ -353,7 +434,7 @@ final class SyncEngine {
     }
     
     // MARK: - Types
-    
+
     private struct SyncStats {
         var read = 0
         var written = 0
@@ -362,6 +443,22 @@ final class SyncEngine {
     
     enum SyncError: LocalizedError {
         case notAuthorized
+        case noReminderCalendar
+        case reminderSaveFailed(String, String)
+        case partialReminderSyncFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .notAuthorized:
+                return "Reminders access not authorized."
+            case .noReminderCalendar:
+                return "No default reminders calendar is available."
+            case let .reminderSaveFailed(title, message):
+                return "Reminder save failed for '\(title)': \(message)"
+            case let .partialReminderSyncFailed(message):
+                return message
+            }
+        }
     }
 }
 

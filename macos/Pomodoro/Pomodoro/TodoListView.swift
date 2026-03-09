@@ -12,6 +12,7 @@ struct TodoListView: View {
     @ObservedObject private var featureGate = FeatureGate.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
     @EnvironmentObject private var localizationManager: LocalizationManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var showingEditor = false
     @State private var editingItem: TodoItem?
@@ -44,6 +45,8 @@ struct TodoListView: View {
     @State private var showAIAssistant = false
     @State private var isRunningAIAssistant = false
     @State private var aiAssistantErrorMessage: String?
+    @State private var animatingCompletionIDs: Set<UUID> = []
+    @State private var bouncingCompletionIDs: Set<UUID> = []
     
     private static let taskHintDefaultsKey = "com.pomodoro.taskHintShown"
     
@@ -226,19 +229,20 @@ struct TodoListView: View {
                     .padding(16)
                 }
             } else {
-                ScrollView {
-                    if filteredItems.isEmpty {
-                        emptyState
-                    } else {
-                        LazyVStack(spacing: 8) {
-                            ForEach(filteredItems) { item in
-                                todoRow(item)
-                                    .opacity(selectedSegment == .completed ? 0.9 : 1.0)
-                                    .allowsHitTesting(selectedSegment == .completed ? false : true)
-                            }
+                if filteredItems.isEmpty {
+                    emptyState
+                } else {
+                    List {
+                        ForEach(filteredItems) { item in
+                            todoRow(item)
+                                .opacity(selectedSegment == .completed ? 0.9 : 1.0)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
                         }
-                        .padding(16)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
             
@@ -431,23 +435,19 @@ struct TodoListView: View {
     private func todoRow(_ item: TodoItem) -> some View {
         let isSelected = selectedTaskIDs.contains(item.id)
         let isExpanded = expandedTaskIDs.contains(item.id)
+        let isAnimatingCompletion = animatingCompletionIDs.contains(item.id)
+        let showsCompletedState = item.isCompleted || isAnimatingCompletion
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Button(action: {
-                    todoStore.toggleCompletion(item)
-                    
-                    if permissionsManager.isRemindersAuthorized,
-                       item.reminderIdentifier != nil {
-                        Task {
-                            if let updatedItem = todoStore.items.first(where: { $0.id == item.id }) {
-                                try? await remindersSync.syncTask(updatedItem)
-                            }
-                        }
-                    }
+                    handleCompletionTap(for: item)
                 }) {
-                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                    Image(systemName: showsCompletedState ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(item.isCompleted ? .green : .secondary)
+                        .foregroundStyle(showsCompletedState ? .green : .secondary)
+                        .scaleEffect(bouncingCompletionIDs.contains(item.id) ? 1.12 : 1.0)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: bouncingCompletionIDs.contains(item.id))
+                        .animation(.easeInOut(duration: 0.2), value: showsCompletedState)
                 }
                 .buttonStyle(.plain)
 
@@ -464,8 +464,9 @@ struct TodoListView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
                         .font(.headline)
-                        .strikethrough(item.isCompleted)
-                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                        .strikethrough(showsCompletedState)
+                        .foregroundStyle(showsCompletedState ? .secondary : .primary)
+                        .animation(.easeInOut(duration: 0.25), value: showsCompletedState)
 
                     if let descriptionMarkdown = item.descriptionMarkdown, !descriptionMarkdown.isEmpty {
                         if isExpanded, featureGate.canUseTaskMarkdown {
@@ -536,7 +537,7 @@ struct TodoListView: View {
                             Label(planningStatusLabel(for: item), systemImage: "calendar.badge.clock")
                                 .font(.caption)
                                 .foregroundStyle(.blue)
-                        } else if !item.isCompleted {
+                        } else if !showsCompletedState {
                             Label(localizationManager.text("tasks.unplanned"), systemImage: "calendar.badge.exclamationmark")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
@@ -586,6 +587,14 @@ struct TodoListView: View {
                         Label(localizationManager.text("tasks.action.remove_plan_date"), systemImage: "calendar.badge.minus")
                     }
                 }
+
+                if item.isCompleted {
+                    Button {
+                        restoreCompletedTask(item)
+                    } label: {
+                        Label(localizationManager.text("tasks.action.restore_task"), systemImage: "arrow.uturn.backward.circle")
+                    }
+                }
                 
                 Button(role: .destructive, action: {
                     if item.reminderIdentifier != nil {
@@ -611,6 +620,9 @@ struct TodoListView: View {
         .padding(12)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
         .cornerRadius(8)
+        .scaleEffect(reduceMotion ? 1.0 : (showsCompletedState ? 0.98 : 1.0))
+        .opacity(showsCompletedState ? 0.6 : (selectedSegment == .completed ? 0.9 : 1.0))
+        .animation(.easeInOut(duration: 0.25), value: showsCompletedState)
         .contentShape(Rectangle())
         .onTapGesture {
             handleTaskSelection(item)
@@ -734,7 +746,44 @@ struct TodoListView: View {
               let task = keyboardFocusedTask else {
             return
         }
-        todoStore.toggleCompletion(task)
+        handleCompletionTap(for: task)
+    }
+
+    private func handleCompletionTap(for item: TodoItem) {
+        if item.isCompleted {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                todoStore.toggleCompletion(item)
+            }
+            syncUpdatedReminderIfNeeded(for: item.id)
+            return
+        }
+
+        _ = withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            bouncingCompletionIDs.insert(item.id)
+        }
+        _ = withAnimation(.easeInOut(duration: 0.25)) {
+            animatingCompletionIDs.insert(item.id)
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            bouncingCompletionIDs.remove(item.id)
+            todoStore.toggleCompletion(item)
+            animatingCompletionIDs.remove(item.id)
+            syncUpdatedReminderIfNeeded(for: item.id)
+        }
+    }
+
+    private func syncUpdatedReminderIfNeeded(for itemID: UUID) {
+        guard permissionsManager.isRemindersAuthorized,
+              let updatedItem = todoStore.items.first(where: { $0.id == itemID }),
+              updatedItem.reminderIdentifier != nil else {
+            return
+        }
+
+        Task {
+            try? await remindersSync.syncTask(updatedItem)
+        }
     }
 
     private func handleKeyboardDelete() {
@@ -791,7 +840,7 @@ struct TodoListView: View {
         case .active:
             return todoStore.pendingItems
         case .completed:
-            return todoStore.completedItems.sorted { $0.modifiedAt > $1.modifiedAt }
+            return todoStore.completedItems
         }
     }
 
@@ -868,6 +917,14 @@ struct TodoListView: View {
         updated.modifiedAt = Date()
         todoStore.updateItem(updated)
         syncToRemindersIfLinked(updated)
+    }
+
+    private func restoreCompletedTask(_ item: TodoItem) {
+        guard item.isCompleted else { return }
+        todoStore.toggleCompletion(item)
+        if let updatedItem = todoStore.items.first(where: { $0.id == item.id }) {
+            syncToRemindersIfLinked(updatedItem)
+        }
     }
 
     private func syncToRemindersIfLinked(_ item: TodoItem) {

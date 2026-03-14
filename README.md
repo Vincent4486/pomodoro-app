@@ -36,12 +36,22 @@ Explore the project website for design philosophies, documentation, and download
 
 ## 🎁 Giveaway Event
 
-We are running an early access TestFlight giveaway.
+The giveaway has ended. Please check your email if you participated. <br>
+Thank you to everyone who participated!
+
+Winners:
+
+- `2*6@qq.com` 
+- `c*e@hotmail.com`  
+- `m*e@gmail.com`
+
+Winners will receive an email with instructions on how to claim their prize.  
+Please reply to the email to confirm and complete the claiming process.
+
+The reward and emails will be sent after confirmation. Additional details about the claiming process will be included in the email.
 
 👉 Full rules & participation details:  
 [View Giveaway Rules](Docs/giveaway.md)
-
-Join the waitlist to enter the draw.
 
 ## 🚀 Try it now
 

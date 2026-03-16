@@ -1,6 +1,8 @@
 import SwiftUI
 import EventKit
 import AppKit
+import FirebaseAuth
+import FirebaseFunctions
 
 /// Calendar view showing time-based events and allowing event creation.
 /// Blocked when unauthorized with explanation and enable button.
@@ -9,7 +11,10 @@ struct CalendarView: View {
     @ObservedObject var calendarManager: CalendarManager
     @ObservedObject var permissionsManager: PermissionsManager
     @ObservedObject var todoStore: TodoStore
+    @ObservedObject private var featureGate = FeatureGate.shared
+    @EnvironmentObject private var authViewModel: AuthViewModel
     @EnvironmentObject private var localizationManager: LocalizationManager
+    @Namespace private var rescheduleAnimationNamespace
     
     @State private var selectedView: ViewType = .day
     @State private var anchorDate: Date = Date()
@@ -26,7 +31,47 @@ struct CalendarView: View {
     @State private var newEventDurationMinutes: Int = 60
     @State private var newEventNotes: String = ""
     @State private var addEventError: String?
-    
+    @State private var showAIAssistant = false
+    @State private var isRunningAIAssistant = false
+    @State private var aiAssistantErrorMessage: String?
+    @State private var isRescheduling = false
+    @State private var rescheduleError: String?
+    @State private var showAILoginSheet = false
+    @State private var showAIUpgradeModal = false
+    @State private var aiUpgradeTitleOverride: String?
+    @State private var aiUpgradeBodyOverride: String?
+
+    // MARK: - Reschedule state
+    /// Snapshot of tasks/events as they existed before the last reschedule — used for Undo.
+    @State private var rescheduleUndoSnapshot: RescheduleUndoSnapshot? = nil
+    /// Set of calendarEventIdentifiers that were written/changed during the last reschedule.
+    @State private var recentlyRescheduledEventIDs: Set<String> = []
+    /// Toast shown after a successful reschedule.
+    @State private var rescheduleToast: RescheduleToast? = nil
+
+    /// Lightweight value type for the post-reschedule toast.
+    private struct RescheduleToast {
+        let changedCount: Int
+    }
+
+    private struct CalendarEventSnapshot {
+        let eventIdentifier: String
+        let title: String
+        let start: Date
+        let end: Date
+    }
+
+    private struct RescheduleUndoSnapshot {
+        let tasks: [TodoItem]
+        let restoredEvents: [CalendarEventSnapshot]
+        let createdEventIDs: [String]
+    }
+
+    private struct AppliedRescheduleResult {
+        let changedEventIDs: Set<String>
+        let undoSnapshot: RescheduleUndoSnapshot
+    }
+
     private static let eventTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -37,6 +82,15 @@ struct CalendarView: View {
     private static let shortDayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "E, MMM d"
+        return formatter
+    }()
+
+    private static let aiDeadlineFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
     
@@ -96,79 +150,140 @@ struct CalendarView: View {
                 }
             )
         }
+        .sheet(isPresented: $showAILoginSheet) {
+            LoginSheetView()
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $showAIUpgradeModal) {
+            aiUpgradeSheet
+        }
+        .sheet(isPresented: $showAIAssistant) {
+            AIAssistantView(
+                tasks: todoStore.pendingItems,
+                availableActions: [.breakdown, .planning, .reschedule],
+                isLoading: isRunningAIAssistant || isRescheduling,
+                errorMessage: rescheduleError ?? aiAssistantErrorMessage,
+                isActionEnabled: { action in
+                    featureGate.canUseAIAssistantAction(action) && !(action == .reschedule && isRescheduling)
+                },
+                onClose: { showAIAssistant = false },
+                onLockedActionTap: { action in
+                    switch action {
+                    case .reschedule:
+                        presentAISchedulingUpgradePrompt()
+                    case .planning:
+                        aiUpgradeTitleOverride = localizationManager.text("tasks.ai_assistant.planning_requires_plus")
+                        aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
+                        showAIUpgradeModal = true
+                    case .breakdown:
+                        aiUpgradeTitleOverride = localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
+                        aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
+                        showAIUpgradeModal = true
+                    }
+                },
+                onRunAction: { action, tasks, dueDate, estimatedHours in
+                    await handleAIAssistantAction(
+                        action,
+                        selectedTasks: tasks,
+                        dueDate: dueDate,
+                        estimatedHours: estimatedHours
+                    )
+                }
+            )
+            .environmentObject(localizationManager)
+        }
     }
     
     private var authorizedContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(localizationManager.text("calendar.title"))
-                        .font(.largeTitle)
-                        .fontWeight(.semibold)
-                    Text(localizationManager.text("calendar.subtitle"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+        ZStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(localizationManager.text("calendar.title"))
+                            .font(.largeTitle)
+                            .fontWeight(.semibold)
+                        Text(localizationManager.text("calendar.subtitle"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 12) {
+                        Picker(localizationManager.text("calendar.view"), selection: $selectedView) {
+                            Text(localizationManager.text("calendar.view.day")).tag(ViewType.day)
+                            Text(localizationManager.text("calendar.view.week")).tag(ViewType.week)
+                            Text(localizationManager.text("calendar.view.month")).tag(ViewType.month)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 260)
+                        .onChange(of: selectedView) { _, _ in
+                            Task { await loadEvents() }
+                        }
+
+                        DatePicker(
+                            "",
+                            selection: $anchorDate,
+                            displayedComponents: .date
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.field)
+                        .onChange(of: anchorDate) { _, _ in
+                            Task { await loadEvents() }
+                        }
+
+                        Spacer()
+
+                        Button {
+                            prepareNewEventDefaults()
+                            showingAddEvent = true
+                        } label: {
+                            Label(localizationManager.text("calendar.add_event"), systemImage: "plus")
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button {
+                            aiAssistantErrorMessage = nil
+                            showAIAssistant = true
+                        } label: {
+                            Label(localizationManager.text("tasks.ai_assistant.button"), systemImage: "sparkles")
+                        }
+                        .buttonStyle(.bordered)
+                        .help(localizationManager.text("calendar.ai_assistant.reschedule_description"))
+
+                        Button {
+                            Task { await loadEvents() }
+                        } label: {
+                            Label(localizationManager.text("common.refresh"), systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    if selectedEventIDs.count > 1 {
+                        batchEventActionsBar
+                    }
                 }
-                
-                HStack(spacing: 12) {
-                    Picker(localizationManager.text("calendar.view"), selection: $selectedView) {
-                        Text(localizationManager.text("calendar.view.day")).tag(ViewType.day)
-                        Text(localizationManager.text("calendar.view.week")).tag(ViewType.week)
-                        Text(localizationManager.text("calendar.view.month")).tag(ViewType.month)
+
+                // Events list constrained to the available detail height
+                GeometryReader { proxy in
+                    ScrollView {
+                        eventsContent(maxWidth: proxy.size.width)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 260)
-                    .onChange(of: selectedView) { _, _ in
-                        Task { await loadEvents() }
-                    }
-                    
-                    DatePicker(
-                        "",
-                        selection: $anchorDate,
-                        displayedComponents: .date
-                    )
-                    .labelsHidden()
-                    .datePickerStyle(.field)
-                    .onChange(of: anchorDate) { _, _ in
-                        Task { await loadEvents() }
-                    }
-                    
-                    Spacer()
-                    
-                    Button {
-                        prepareNewEventDefaults()
-                        showingAddEvent = true
-                    } label: {
-                        Label(localizationManager.text("calendar.add_event"), systemImage: "plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    
-                    Button {
-                        Task { await loadEvents() }
-                    } label: {
-                        Label(localizationManager.text("common.refresh"), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.bordered)
+                    .frame(height: max(proxy.size.height, 280))
                 }
-                
-                if selectedEventIDs.count > 1 {
-                    batchEventActionsBar
-                }
+
+                Spacer(minLength: 0)
             }
-            
-            // Events list constrained to the available detail height
-            GeometryReader { proxy in
-                ScrollView {
-                    eventsContent(maxWidth: proxy.size.width)
-                }
-                .frame(height: max(proxy.size.height, 280))
+            .padding(.horizontal, 32)
+            .padding(.vertical, 24)
+            .frame(maxWidth: 860, alignment: .leading)
+
+            // MARK: Reschedule toast
+            if let toast = rescheduleToast {
+                rescheduleToastView(toast)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(.top, 24)
             }
-            
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 32)
-        .padding(.vertical, 24)
-        .frame(maxWidth: 860, alignment: .leading)
+        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: rescheduleToast != nil)
     }
     
     private var unauthorizedContent: some View {
@@ -218,10 +333,66 @@ struct CalendarView: View {
             Text(localizationManager.text("calendar.access_denied.body"))
         }
     }
+
+    private var aiUpgradeSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(aiUpgradeTitleOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_title"))
+                .font(.title3.weight(.semibold))
+
+            Text(aiUpgradeBodyOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_body"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button(localizationManager.text("common.cancel")) {
+                    aiUpgradeTitleOverride = nil
+                    aiUpgradeBodyOverride = nil
+                    showAIUpgradeModal = false
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button(localizationManager.text("tasks.ai_assistant.upgrade")) {
+                    openPricingPage()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
+    }
     
     @ViewBuilder
-    private func eventsContent(maxWidth: CGFloat) -> some View {
-        if calendarManager.isLoading {
+    private func rescheduleToastView(_ toast: RescheduleToast) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(localizationManager.text("calendar.reschedule.toast_title"))
+                    .font(.subheadline.weight(.semibold))
+                if toast.changedCount > 0 {
+                    Text(localizationManager.format("calendar.reschedule.toast_detail", toast.changedCount))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button(localizationManager.text("calendar.reschedule.undo")) {
+                revertCalendarReschedule()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .frame(maxWidth: 420)
+    }
+
+    @ViewBuilder
+    private func eventsContent(maxWidth: CGFloat) -> some View {        if calendarManager.isLoading {
             ProgressView(localizationManager.text("calendar.loading"))
                 .padding(32)
                 .frame(maxWidth: maxWidth, alignment: .leading)
@@ -259,6 +430,463 @@ struct CalendarView: View {
             events: calendarManager.events
         )
         .frame(maxWidth: maxWidth, alignment: .leading)
+    }
+
+    private func handleAIAssistantAction(
+        _ action: AIAssistantAction,
+        selectedTasks: [TodoItem],
+        dueDate: Date,
+        estimatedHours: Int
+    ) async {
+        aiAssistantErrorMessage = nil
+        rescheduleError = nil
+
+        guard authViewModel.isAuthenticated else {
+            showAIAssistant = false
+            showAILoginSheet = true
+            return
+        }
+
+        if let quotaMessage = featureGate.aiPlanningQuotaMessage {
+            aiAssistantErrorMessage = quotaMessage
+            return
+        }
+
+        guard featureGate.canUseAIAssistantAction(action), !featureGate.isAIQuotaExhausted else {
+            switch action {
+            case .reschedule:
+                presentAISchedulingUpgradePrompt()
+            case .planning:
+                aiAssistantErrorMessage = localizationManager.text("tasks.ai_assistant.planning_requires_plus")
+            case .breakdown:
+                aiAssistantErrorMessage = localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
+            }
+            return
+        }
+
+        isRunningAIAssistant = true
+        defer { isRunningAIAssistant = false }
+
+        do {
+            switch action {
+            case .breakdown:
+                guard let task = selectedTasks.first else { return }
+                let response = try await AIService.shared.taskBreakdown(
+                    task: assistantBreakdownPrompt(for: task),
+                    deadline: Self.aiDeadlineFormatter.string(from: dueDate),
+                    estimatedHours: estimatedHours
+                )
+                try applyAIPlan(
+                    response,
+                    dueDate: Calendar.current.startOfDay(for: dueDate),
+                    parentNotes: assistantNotes(for: selectedTasks, action: action),
+                    tags: assistantTags(for: selectedTasks),
+                    createAsSubtasks: true,
+                    aiOrigin: .breakdown
+                )
+            case .planning:
+                guard !selectedTasks.isEmpty else { return }
+                let response = try await AIService.shared.taskPlanning(
+                    tasks: selectedTasks.map(\.title),
+                    deadline: Self.aiDeadlineFormatter.string(from: dueDate),
+                    estimatedHours: estimatedHours
+                )
+                try applyAIPlan(
+                    response,
+                    dueDate: Calendar.current.startOfDay(for: dueDate),
+                    parentNotes: assistantNotes(for: selectedTasks, action: action),
+                    tags: assistantTags(for: selectedTasks),
+                    createAsSubtasks: false,
+                    aiOrigin: .planning
+                )
+            case .reschedule:
+                await performCalendarReschedule()
+            }
+            if action != .reschedule || rescheduleError == nil {
+                showAIAssistant = false
+            }
+        } catch {
+            if action == .reschedule {
+                rescheduleError = "Failed to reschedule. Please try again."
+            } else {
+                aiAssistantErrorMessage = (error as NSError).localizedDescription
+            }
+        }
+    }
+
+    private func assistantBreakdownPrompt(for task: TodoItem) -> String {
+        let notes = task.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !notes.isEmpty else { return task.title }
+        return "\(task.title)\n\nContext:\n\(notes)"
+    }
+
+    private func assistantNotes(for tasks: [TodoItem], action: AIAssistantAction) -> String {
+        switch action {
+        case .breakdown:
+            return tasks[0].notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        case .planning:
+            let titles = tasks.map(\.title).joined(separator: ", ")
+            return localizationManager.format("tasks.ai_plan.generated_note", titles, tasks.count)
+        case .reschedule:
+            return ""
+        }
+    }
+
+    private func assistantTags(for tasks: [TodoItem]) -> [String] {
+        Array(Set(tasks.flatMap(\.tags))).sorted()
+    }
+
+    private func applyAIPlan(
+        _ response: AIService.TaskBreakdownResponse,
+        dueDate: Date?,
+        parentNotes: String,
+        tags: [String],
+        createAsSubtasks: Bool,
+        aiOrigin: TodoItem.AIOrigin
+    ) throws {
+        guard !response.subtasks.isEmpty else {
+            throw AIService.AIServiceError.invalidResponse
+        }
+
+        if createAsSubtasks, featureGate.canUseSubtasks {
+            let item = TodoItem(
+                title: response.taskTitle,
+                descriptionMarkdown: parentNotes.isEmpty ? nil : parentNotes,
+                dueDate: dueDate,
+                hasDueTime: false,
+                durationMinutes: totalDurationMinutes(for: response.subtasks),
+                priority: .medium,
+                subtasks: response.subtasks.map { TodoSubtask(title: "\($0.title) (\($0.pomodoros)x25m)") },
+                tags: tags,
+                syncToCalendar: false,
+                aiOrigin: aiOrigin,
+                plannedPomodoroCount: response.estimatedPomodoros
+            )
+            todoStore.addItem(item)
+        } else {
+            for (index, subtask) in response.subtasks.enumerated() {
+                let item = TodoItem(
+                    title: subtask.title,
+                    descriptionMarkdown: aiNotes(
+                        parentTaskTitle: response.taskTitle,
+                        parentNotes: parentNotes,
+                        pomodoros: subtask.pomodoros
+                    ),
+                    dueDate: dueDate,
+                    hasDueTime: false,
+                    durationMinutes: durationMinutes(for: subtask.pomodoros, presetID: subtask.pomodoroPreset),
+                    tags: tags,
+                    syncToCalendar: false,
+                    aiOrigin: aiOrigin,
+                    aiOrder: index,
+                    pomodoroPresetID: subtask.pomodoroPreset,
+                    plannedPomodoroCount: subtask.pomodoros
+                )
+                todoStore.addItem(item)
+            }
+        }
+    }
+
+    private func aiNotes(parentTaskTitle: String, parentNotes: String, pomodoros: Int) -> String? {
+        let generatedSummary = localizationManager.format("tasks.ai_plan.generated_note", parentTaskTitle, pomodoros)
+        guard !parentNotes.isEmpty else {
+            return generatedSummary
+        }
+        return "\(generatedSummary)\n\(parentNotes)"
+    }
+
+    private func durationMinutes(for pomodoros: Int, presetID: String?) -> Int {
+        let preset = Preset.matching(id: presetID) ?? Preset.shortestBuiltIn
+        return max(1, pomodoros) * max(1, preset.durationConfig.workDuration / 60)
+    }
+
+    private func totalDurationMinutes(for subtasks: [AIService.AIPlanningResponse.Subtask]) -> Int {
+        subtasks.reduce(0) { total, subtask in
+            total + durationMinutes(for: subtask.pomodoros, presetID: subtask.pomodoroPreset)
+        }
+    }
+
+    private func applyCalendarSchedule(_ response: AIService.AIScheduleResponse) throws {
+        guard response.success, !response.schedule.isEmpty else {
+            throw AIService.AIServiceError.invalidResponse
+        }
+
+        let eventStore = SharedEventStore.shared.eventStore
+        let defaultCalendar = eventStore.defaultCalendarForNewEvents
+
+        for entry in response.schedule {
+            guard let taskID = UUID(uuidString: entry.taskId),
+                  let existing = todoStore.items.first(where: { $0.id == taskID }) else {
+                continue
+            }
+
+            var updated = existing
+            updated.dueDate = entry.start
+            updated.hasDueTime = true
+            updated.durationMinutes = max(max(1, Preset.shortestBuiltIn.durationConfig.workDuration / 60), Int(entry.end.timeIntervalSince(entry.start) / 60))
+            updated.syncToCalendar = entry.calendarWritable
+            updated.aiOrigin = .calendarSchedule
+            updated.pomodoroPresetID = entry.pomodoroPreset
+            updated.plannedPomodoroCount = entry.pomodoros
+            updated.modifiedAt = Date()
+            todoStore.updateItem(updated)
+
+            guard entry.calendarWritable else {
+                print("[CalendarView] Skipping read-only schedule block for task \(entry.taskId)")
+                continue
+            }
+
+            guard let defaultCalendar else {
+                print("[CalendarView] No writable default calendar available for scheduled task \(entry.taskId)")
+                continue
+            }
+
+            let event = EKEvent(eventStore: eventStore)
+            event.title = entry.taskTitle
+            event.startDate = entry.start
+            event.endDate = entry.end
+            event.isAllDay = false
+            event.calendar = defaultCalendar
+
+            do {
+                try eventStore.save(event, span: .thisEvent, commit: true)
+                if let savedEventId = event.eventIdentifier {
+                    var linked = updated
+                    linked.calendarEventIdentifier = savedEventId
+                    linked.linkedCalendarEventId = savedEventId
+                    todoStore.updateItem(linked)
+                }
+            } catch {
+                print("[CalendarView] Failed to save scheduled event for task \(entry.taskId): \(error)")
+            }
+        }
+
+        calendarManager.updateAIFreeSlots(response.freeSlots)
+        Task {
+            await loadEvents()
+        }
+    }
+
+    private func openPricingPage() {
+        guard let url = URL(string: "https://pomodoro-app.tech") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func presentAISchedulingUpgradePrompt() {
+        aiUpgradeTitleOverride = localizationManager.text("calendar.ai_auto_schedule.requires_pro_title")
+        aiUpgradeBodyOverride = localizationManager.text("calendar.ai_auto_schedule.requires_pro")
+        showAIUpgradeModal = true
+    }
+
+    private func performCalendarReschedule() async {
+        print("Reschedule button tapped")
+        isRescheduling = true
+        rescheduleError = nil
+        defer { isRescheduling = false }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            rescheduleToast = nil
+            recentlyRescheduledEventIDs = []
+        }
+
+        // Prefer today first, but include tomorrow so true overflow can spill over.
+        let schedulingStart = Calendar.current.startOfDay(for: Date())
+        guard let preferredDayEnd = Calendar.current.date(byAdding: .day, value: 1, to: schedulingStart),
+              let schedulingRangeEnd = Calendar.current.date(byAdding: .day, value: 2, to: schedulingStart) else { return }
+
+        let calendarEvents = calendarManager.readEvents(from: schedulingStart, to: schedulingRangeEnd)
+        let schedulableTasks = tasksRelevantForTodayReschedule(
+            from: todoStore.pendingItems,
+            calendarEvents: calendarEvents,
+            schedulingEnd: preferredDayEnd
+        )
+        guard !schedulableTasks.isEmpty else {
+            rescheduleError = "No tasks planned for today to reorganize."
+            return
+        }
+
+        let immutableCalendarEvents = immutableCalendarEventsForTodayReschedule(
+            allEvents: calendarEvents,
+            schedulableTasks: schedulableTasks
+        )
+        let freeSlots = calendarFreeSlots(from: immutableCalendarEvents, rangeStart: schedulingStart, rangeEnd: schedulingRangeEnd)
+        let workingHours = defaultWorkingHours()
+        let schedulingPreset = Preset.shortestBuiltIn
+        let requestTasks = rescheduleRequestTasks(from: schedulableTasks, schedulingEnd: schedulingRangeEnd)
+
+        // Snapshot current task state for potential undo.
+        let preRescheduleSnapshot = schedulableTasks
+
+        do {
+            print("Sending reschedule request to backend (scope: today)")
+            let decoded = try await AIService.shared.calendarReschedule(
+                tasks: requestTasks,
+                events: immutableCalendarEvents,
+                freeSlots: freeSlots,
+                preferences: .init(
+                    pomodoroLength: max(1, schedulingPreset.durationConfig.workDuration / 60),
+                    breakLength: max(0, schedulingPreset.durationConfig.shortBreakDuration / 60),
+                    workingHoursStart: workingHours.start,
+                    workingHoursEnd: workingHours.end
+                ),
+                preferredDayEnd: preferredDayEnd
+            )
+
+            guard decoded.success else {
+                rescheduleError = "Scheduling request was rejected by the server."
+                return
+            }
+
+            guard !decoded.schedule.isEmpty else {
+                rescheduleError = "No schedule could be generated."
+                return
+            }
+
+            // Persist the before-state and apply the new schedule.
+            let result = try applyCalendarScheduleReturningResult(
+                decoded,
+                originalTasks: preRescheduleSnapshot
+            )
+            rescheduleUndoSnapshot = result.undoSnapshot
+
+            // Show animated highlight and toast.
+            withAnimation(.easeInOut(duration: 0.5)) {
+                recentlyRescheduledEventIDs = result.changedEventIDs
+                rescheduleToast = RescheduleToast(changedCount: result.changedEventIDs.count)
+            }
+
+            // Auto-clear highlights after 4 s; dismiss toast after 6 s.
+            Task {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                withAnimation { recentlyRescheduledEventIDs = [] }
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                withAnimation { rescheduleToast = nil }
+            }
+
+        } catch {
+            print("[CalendarView] Reschedule request failed: \(error)")
+            let nsError = error as NSError
+            if nsError.domain == FunctionsErrorDomain,
+               nsError.code == FunctionsErrorCode.deadlineExceeded.rawValue {
+                rescheduleError = "Scheduling request timed out. Please try again."
+            } else {
+                rescheduleError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Restores tasks from the pre-reschedule snapshot and reloads events.
+    private func revertCalendarReschedule() {
+        guard let snapshot = rescheduleUndoSnapshot else { return }
+        let eventStore = SharedEventStore.shared.eventStore
+
+        for eventIdentifier in snapshot.createdEventIDs {
+            guard let event = eventStore.event(withIdentifier: eventIdentifier),
+                  event.calendar.allowsContentModifications else {
+                continue
+            }
+            try? eventStore.remove(event, span: .thisEvent, commit: false)
+        }
+
+        for eventSnapshot in snapshot.restoredEvents {
+            guard let event = eventStore.event(withIdentifier: eventSnapshot.eventIdentifier),
+                  event.calendar.allowsContentModifications else {
+                continue
+            }
+            event.title = eventSnapshot.title
+            event.startDate = eventSnapshot.start
+            event.endDate = eventSnapshot.end
+            try? eventStore.save(event, span: .thisEvent, commit: false)
+        }
+
+        try? eventStore.commit()
+
+        for item in snapshot.tasks {
+            todoStore.updateItem(item)
+        }
+        rescheduleUndoSnapshot = nil
+        withAnimation { rescheduleToast = nil }
+        recentlyRescheduledEventIDs = []
+        Task { await loadEvents() }
+    }
+
+    private func defaultWorkingHours() -> (start: String, end: String) {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.dateFormat = "HH:mm"
+
+        let calendar = Calendar.current
+        let today = Date()
+        let startDate = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: today) ?? today
+        let endDate = calendar.date(bySettingHour: 22, minute: 0, second: 0, of: today) ?? today
+        return (start: formatter.string(from: startDate), end: formatter.string(from: endDate))
+    }
+
+    private func calendarFreeSlots(from events: [EKEvent], rangeStart: Date, rangeEnd: Date) -> [AIService.FreeSlot] {
+        guard rangeEnd > rangeStart else { return [] }
+
+        let workingHours = defaultWorkingHoursComponents()
+        var freeSlots: [AIService.FreeSlot] = []
+        let calendar = Calendar.current
+        var dayCursor = calendar.startOfDay(for: rangeStart)
+
+        while dayCursor < rangeEnd {
+            guard let workingStart = calendar.date(
+                bySettingHour: workingHours.startHour,
+                minute: workingHours.startMinute,
+                second: 0,
+                of: dayCursor
+            ),
+            let workingEnd = calendar.date(
+                bySettingHour: workingHours.endHour,
+                minute: workingHours.endMinute,
+                second: 0,
+                of: dayCursor
+            ) else {
+                break
+            }
+
+            let dayStart = max(workingStart, rangeStart)
+            let dayEnd = min(workingEnd, rangeEnd)
+            if dayEnd > dayStart {
+                let dayEvents = events
+                    .filter { $0.endDate > dayStart && $0.startDate < dayEnd }
+                    .sorted { $0.startDate < $1.startDate }
+
+                var cursor = dayStart
+                for event in dayEvents {
+                    let blockStart = max(event.startDate, dayStart)
+                    let blockEnd = min(event.endDate, dayEnd)
+                    if blockStart > cursor {
+                        freeSlots.append(AIService.FreeSlot(start: cursor, end: blockStart))
+                    }
+                    cursor = max(cursor, blockEnd)
+                }
+
+                if cursor < dayEnd {
+                    freeSlots.append(AIService.FreeSlot(start: cursor, end: dayEnd))
+                }
+            }
+
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayCursor) else {
+                break
+            }
+            dayCursor = nextDay
+        }
+
+        return freeSlots.filter { $0.end > $0.start }
+    }
+
+    private func isSubscribedCalendar(_ calendar: EKCalendar) -> Bool {
+        calendar.type == .subscription
+    }
+
+    private func defaultWorkingHoursComponents() -> (startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
+        (startHour: 8, startMinute: 0, endHour: 22, endMinute: 0)
     }
     
     private func daysInWeek(from date: Date) -> [Date] {
@@ -343,6 +971,10 @@ struct CalendarView: View {
                             .foregroundStyle(.secondary)
                         ForEach(todayEvents, id: \.eventIdentifier) { event in
                             blockCard(event, events: todayEvents)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity.combined(with: .move(edge: .bottom))
+                                ))
                         }
                     }
 
@@ -355,6 +987,7 @@ struct CalendarView: View {
                         }
                     }
                 }
+                .animation(.easeInOut(duration: 0.5), value: todayEvents.map { "\(($0.eventIdentifier ?? "missing"))-\($0.startDate.timeIntervalSinceReferenceDate)" })
                 .padding(.vertical, 8)
             }
         }
@@ -365,9 +998,17 @@ struct CalendarView: View {
 
     private func blockCard(_ event: EKEvent, events: [EKEvent]) -> some View {
         let isSelected = event.eventIdentifier.map { selectedEventIDs.contains($0) } ?? false
+        let isRescheduled = event.eventIdentifier.map { recentlyRescheduledEventIDs.contains($0) } ?? false
         return VStack(alignment: .leading, spacing: 6) {
-            Text(event.title ?? localizationManager.text("common.untitled"))
-                .font(.headline)
+            HStack(spacing: 6) {
+                Text(event.title ?? localizationManager.text("common.untitled"))
+                    .font(.headline)
+                if isRescheduled {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+            }
             Text(formatEventTime(event))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -379,8 +1020,23 @@ struct CalendarView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+        .background(
+            isRescheduled
+                ? Color.green.opacity(0.10)
+                : (isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+        )
+        .overlay(
+            isRescheduled
+                ? RoundedRectangle(cornerRadius: 8).stroke(Color.green.opacity(0.4), lineWidth: 1)
+                : nil
+        )
         .cornerRadius(8)
+        .scaleEffect(isRescheduled ? 1.02 : 1.0)
+        .shadow(color: isRescheduled ? Color.green.opacity(0.18) : .clear, radius: 10, x: 0, y: 6)
+        .modifier(RescheduleMatchedGeometry(
+            eventIdentifier: event.eventIdentifier,
+            namespace: rescheduleAnimationNamespace
+        ))
         .contentShape(Rectangle())
         .onTapGesture(perform: {
             handleEventSelection(event, allEvents: events)
@@ -567,6 +1223,168 @@ struct CalendarView: View {
         }
     }
 
+    private func tasksRelevantForTodayReschedule(
+        from tasks: [TodoItem],
+        calendarEvents: [EKEvent],
+        schedulingEnd: Date
+    ) -> [TodoItem] {
+        let todaysEventIDs = Set(calendarEvents.compactMap(\.eventIdentifier))
+        return tasks.filter { item in
+            let trimmedTitle = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedTitle.isEmpty else { return false }
+
+            if let dueDate = item.dueDate, dueDate < schedulingEnd {
+                return true
+            }
+
+            if let linkedEventID = item.calendarEventIdentifier ?? item.linkedCalendarEventId {
+                return todaysEventIDs.contains(linkedEventID)
+            }
+
+            return false
+        }
+    }
+
+    private func rescheduleRequestTasks(from tasks: [TodoItem], schedulingEnd: Date) -> [TodoItem] {
+        tasks.map { item in
+            var requestItem = item
+            // Existing block start times should not act as hard deadlines.
+            // We allow spillover into tomorrow when today is genuinely full.
+            requestItem.dueDate = schedulingEnd
+            requestItem.hasDueTime = true
+            return requestItem
+        }
+    }
+
+    private func immutableCalendarEventsForTodayReschedule(
+        allEvents: [EKEvent],
+        schedulableTasks: [TodoItem]
+    ) -> [EKEvent] {
+        let movableEventIDs = Set(
+            schedulableTasks.compactMap { $0.calendarEventIdentifier ?? $0.linkedCalendarEventId }
+        )
+        return allEvents.filter { event in
+            guard let eventIdentifier = event.eventIdentifier else { return true }
+            return !movableEventIDs.contains(eventIdentifier)
+        }
+    }
+
+    private func applyCalendarScheduleReturningResult(
+        _ response: AIService.AIScheduleResponse,
+        originalTasks: [TodoItem]
+    ) throws -> AppliedRescheduleResult {
+        guard response.success, !response.schedule.isEmpty else {
+            throw AIService.AIServiceError.invalidResponse
+        }
+
+        let eventStore = SharedEventStore.shared.eventStore
+        let defaultCalendar = eventStore.defaultCalendarForNewEvents
+        let originalTasksByID = Dictionary(uniqueKeysWithValues: originalTasks.map { ($0.id, $0) })
+        var restoredEvents: [CalendarEventSnapshot] = []
+        var restoredEventIDs: Set<String> = []
+        var createdEventIDs: [String] = []
+        var changedEventIDs: Set<String> = []
+
+        for entry in response.schedule {
+            guard let taskID = UUID(uuidString: entry.taskId),
+                  let existing = todoStore.items.first(where: { $0.id == taskID }) else {
+                continue
+            }
+
+            let originalTask = originalTasksByID[taskID] ?? existing
+            var updated = existing
+            updated.dueDate = entry.start
+            updated.hasDueTime = true
+            updated.durationMinutes = max(max(1, Preset.shortestBuiltIn.durationConfig.workDuration / 60), Int(entry.end.timeIntervalSince(entry.start) / 60))
+            updated.syncToCalendar = entry.calendarWritable
+            updated.aiOrigin = .calendarSchedule
+            updated.pomodoroPresetID = entry.pomodoroPreset
+            updated.plannedPomodoroCount = entry.pomodoros
+            updated.modifiedAt = Date()
+            todoStore.updateItem(updated)
+
+            guard entry.calendarWritable else {
+                print("[CalendarView] Skipping read-only schedule block for task \(entry.taskId)")
+                continue
+            }
+
+            let existingEventID = originalTask.calendarEventIdentifier ?? originalTask.linkedCalendarEventId
+            if let existingEventID,
+               let event = eventStore.event(withIdentifier: existingEventID),
+               event.calendar.allowsContentModifications {
+                let hasChanged = event.title != entry.taskTitle
+                    || event.startDate != entry.start
+                    || event.endDate != entry.end
+                if hasChanged {
+                    if restoredEventIDs.insert(existingEventID).inserted {
+                        restoredEvents.append(
+                            CalendarEventSnapshot(
+                                eventIdentifier: existingEventID,
+                                title: event.title ?? localizationManager.text("common.untitled"),
+                                start: event.startDate,
+                                end: event.endDate
+                            )
+                        )
+                    }
+                    event.title = entry.taskTitle
+                    event.startDate = entry.start
+                    event.endDate = entry.end
+                    try eventStore.save(event, span: .thisEvent, commit: false)
+                    changedEventIDs.insert(existingEventID)
+                }
+
+                var linked = updated
+                linked.calendarEventIdentifier = existingEventID
+                linked.linkedCalendarEventId = existingEventID
+                todoStore.updateItem(linked)
+                continue
+            }
+
+            guard let defaultCalendar else {
+                print("[CalendarView] No writable default calendar available for scheduled task \(entry.taskId)")
+                continue
+            }
+
+            let event = EKEvent(eventStore: eventStore)
+            event.title = entry.taskTitle
+            event.startDate = entry.start
+            event.endDate = entry.end
+            event.isAllDay = false
+            event.calendar = defaultCalendar
+
+            do {
+                try eventStore.save(event, span: .thisEvent, commit: false)
+                if let savedEventId = event.eventIdentifier {
+                    createdEventIDs.append(savedEventId)
+                    changedEventIDs.insert(savedEventId)
+
+                    var linked = updated
+                    linked.calendarEventIdentifier = savedEventId
+                    linked.linkedCalendarEventId = savedEventId
+                    todoStore.updateItem(linked)
+                }
+            } catch {
+                print("[CalendarView] Failed to save scheduled event for task \(entry.taskId): \(error)")
+            }
+        }
+
+        try eventStore.commit()
+
+        calendarManager.updateAIFreeSlots(response.freeSlots)
+        Task {
+            await loadEvents()
+        }
+
+        return AppliedRescheduleResult(
+            changedEventIDs: changedEventIDs,
+            undoSnapshot: RescheduleUndoSnapshot(
+                tasks: originalTasks,
+                restoredEvents: restoredEvents,
+                createdEventIDs: createdEventIDs
+            )
+        )
+    }
+
     private func formattedTaskDue(item: TodoItem, due: Date) -> String {
         Self.shortDayFormatter.locale = localizationManager.effectiveLocale
         Self.eventTimeFormatter.locale = localizationManager.effectiveLocale
@@ -667,6 +1485,19 @@ private struct AddEventSheet: View {
         }
         .padding(24)
         .frame(width: 420)
+    }
+}
+
+private struct RescheduleMatchedGeometry: ViewModifier {
+    let eventIdentifier: String?
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if let eventIdentifier {
+            content.matchedGeometryEffect(id: eventIdentifier, in: namespace)
+        } else {
+            content
+        }
     }
 }
 

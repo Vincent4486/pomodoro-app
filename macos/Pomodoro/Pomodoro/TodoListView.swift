@@ -264,6 +264,7 @@ struct TodoListView: View {
         .sheet(isPresented: $showAIAssistant) {
             AIAssistantView(
                 tasks: toolbarAICandidateTasks,
+                availableActions: [.breakdown, .planning],
                 isLoading: isRunningAIAssistant,
                 errorMessage: aiAssistantErrorMessage,
                 isActionEnabled: { action in
@@ -272,8 +273,8 @@ struct TodoListView: View {
                 onClose: { showAIAssistant = false },
                 onLockedActionTap: { action in
                     aiUpgradeTitleOverride = action == .planning
-                        ? localizationManager.text("tasks.ai_assistant.planning_requires_pro")
-                        : localizationManager.text("tasks.ai_assistant.plus_feature_title")
+                        ? localizationManager.text("tasks.ai_assistant.planning_requires_plus")
+                        : localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
                     aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
                     showAIUpgradeModal = true
                 },
@@ -908,6 +909,7 @@ struct TodoListView: View {
         updated.modifiedAt = Date()
         todoStore.updateItem(updated)
         syncToRemindersIfLinked(updated)
+        syncToCalendarIfEnabled(updated)
     }
 
     private func clearPlanDate(for item: TodoItem) {
@@ -917,6 +919,7 @@ struct TodoListView: View {
         updated.modifiedAt = Date()
         todoStore.updateItem(updated)
         syncToRemindersIfLinked(updated)
+        syncToCalendarIfEnabled(updated)
     }
 
     private func restoreCompletedTask(_ item: TodoItem) {
@@ -924,6 +927,7 @@ struct TodoListView: View {
         todoStore.toggleCompletion(item)
         if let updatedItem = todoStore.items.first(where: { $0.id == item.id }) {
             syncToRemindersIfLinked(updatedItem)
+            syncToCalendarIfEnabled(updatedItem)
         }
     }
 
@@ -934,6 +938,18 @@ struct TodoListView: View {
         }
         Task {
             try? await remindersSync.syncTask(item)
+        }
+    }
+
+    private func syncToCalendarIfEnabled(_ item: TodoItem) {
+        guard permissionsManager.isCalendarAuthorized,
+              item.syncToCalendar || item.calendarEventIdentifier != nil else {
+            return
+        }
+        Task {
+            let engine = SyncEngine(permissionsManager: permissionsManager)
+            engine.attachTodoStore(todoStore)
+            try? await engine.syncCalendarEvents()
         }
     }
     
@@ -1197,6 +1213,7 @@ struct TodoListView: View {
                editing.reminderIdentifier != nil {
                 Task { try? await remindersSync.syncTask(editing) }
             }
+            syncToCalendarIfEnabled(editing)
         } else {
             let newItem = TodoItem(
                 title: trimmedTitle,
@@ -1208,6 +1225,7 @@ struct TodoListView: View {
                 syncToCalendar: syncToCalendarField
             )
             todoStore.addItem(newItem)
+            syncToCalendarIfEnabled(newItem)
         }
         
         resetEditor()
@@ -1240,7 +1258,8 @@ struct TodoListView: View {
                 hasDueTime: dueDateEnabled ? includeDueTime : false,
                 parentNotes: descriptionField.trimmingCharacters(in: .whitespacesAndNewlines),
                 tags: parsedTagsField(),
-                createAsSubtasks: true
+                createAsSubtasks: true,
+                aiOrigin: .breakdown
             )
             resetEditor()
             showingEditor = false
@@ -1295,8 +1314,8 @@ struct TodoListView: View {
 
         if featureGate.shouldShowUpgradeModal(for: action) {
             aiUpgradeTitleOverride = action == .planning
-                ? localizationManager.text("tasks.ai_assistant.planning_requires_pro")
-                : localizationManager.text("tasks.ai_assistant.plus_feature_title")
+                ? localizationManager.text("tasks.ai_assistant.planning_requires_plus")
+                : localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
             aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
             showAIUpgradeModal = true
             return
@@ -1335,6 +1354,8 @@ struct TodoListView: View {
                     deadline: Self.aiDeadlineFormatter.string(from: dueDate),
                     estimatedHours: estimatedHours
                 )
+            case .reschedule:
+                return
             }
 
             try applyAIPlan(
@@ -1343,7 +1364,8 @@ struct TodoListView: View {
                 hasDueTime: false,
                 parentNotes: assistantNotes(for: selectedTasks, action: action),
                 tags: assistantTags(for: selectedTasks),
-                createAsSubtasks: true
+                createAsSubtasks: action == .breakdown,
+                aiOrigin: action == .planning ? .planning : .breakdown
             )
             showAIAssistant = false
         } catch {
@@ -1366,6 +1388,8 @@ struct TodoListView: View {
         case .planning:
             let titles = tasks.map(\.title).joined(separator: ", ")
             return localizationManager.format("tasks.ai_plan.generated_note", titles, tasks.count)
+        case .reschedule:
+            return ""
         }
     }
 
@@ -1386,7 +1410,8 @@ struct TodoListView: View {
         hasDueTime: Bool,
         parentNotes: String,
         tags: [String],
-        createAsSubtasks: Bool = false
+        createAsSubtasks: Bool = false,
+        aiOrigin: TodoItem.AIOrigin
     ) throws {
         guard !response.subtasks.isEmpty else {
             throw AIService.AIServiceError.invalidResponse
@@ -1398,15 +1423,17 @@ struct TodoListView: View {
                 descriptionMarkdown: parentNotes.isEmpty ? nil : parentNotes,
                 dueDate: dueDate,
                 hasDueTime: hasDueTime,
-                durationMinutes: max(1, response.estimatedPomodoros) * 25,
+                durationMinutes: totalDurationMinutes(for: response.subtasks),
                 priority: .medium,
                 subtasks: response.subtasks.map { TodoSubtask(title: "\($0.title) (\($0.pomodoros)x25m)") },
                 tags: tags,
-                syncToCalendar: false
+                syncToCalendar: false,
+                aiOrigin: aiOrigin,
+                plannedPomodoroCount: response.estimatedPomodoros
             )
             todoStore.addItem(item)
         } else {
-            for subtask in response.subtasks {
+            for (index, subtask) in response.subtasks.enumerated() {
                 let item = TodoItem(
                     title: subtask.title,
                     descriptionMarkdown: aiNotes(
@@ -1416,9 +1443,13 @@ struct TodoListView: View {
                     ),
                     dueDate: dueDate,
                     hasDueTime: hasDueTime,
-                    durationMinutes: max(1, subtask.pomodoros) * 25,
+                    durationMinutes: durationMinutes(for: subtask.pomodoros, presetID: subtask.pomodoroPreset),
                     tags: tags,
-                    syncToCalendar: false
+                    syncToCalendar: false,
+                    aiOrigin: aiOrigin,
+                    aiOrder: index,
+                    pomodoroPresetID: subtask.pomodoroPreset,
+                    plannedPomodoroCount: subtask.pomodoros
                 )
                 todoStore.addItem(item)
             }
@@ -1438,6 +1469,17 @@ struct TodoListView: View {
             return generatedSummary
         }
         return "\(generatedSummary)\n\(parentNotes)"
+    }
+
+    private func durationMinutes(for pomodoros: Int, presetID: String?) -> Int {
+        let preset = Preset.matching(id: presetID) ?? Preset.shortestBuiltIn
+        return max(1, pomodoros) * max(1, preset.durationConfig.workDuration / 60)
+    }
+
+    private func totalDurationMinutes(for subtasks: [AIService.AIPlanningResponse.Subtask]) -> Int {
+        subtasks.reduce(0) { total, subtask in
+            total + durationMinutes(for: subtask.pomodoros, presetID: subtask.pomodoroPreset)
+        }
     }
 }
 
@@ -1546,6 +1588,7 @@ extension TodoListView {
                task.reminderIdentifier != nil {
                 Task { try? await remindersSync.syncTask(task) }
             }
+            syncToCalendarIfEnabled(task)
         }
         clearTaskSelection()
     }
@@ -1563,6 +1606,7 @@ extension TodoListView {
                task.reminderIdentifier != nil {
                 Task { try? await remindersSync.syncTask(task) }
             }
+            syncToCalendarIfEnabled(task)
         }
         clearTaskSelection()
     }

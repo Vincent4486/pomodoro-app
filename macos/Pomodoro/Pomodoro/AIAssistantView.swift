@@ -3,11 +3,21 @@ import SwiftUI
 enum AIAssistantAction: String, CaseIterable, Identifiable {
     case breakdown
     case planning
+    case reschedule
 
     var id: String { rawValue }
 
     var allowsMultipleSelection: Bool {
         self == .planning
+    }
+
+    var requiresTaskSelection: Bool {
+        switch self {
+        case .breakdown, .planning:
+            return true
+        case .reschedule:
+            return false
+        }
     }
 
     var systemImage: String {
@@ -16,6 +26,8 @@ enum AIAssistantAction: String, CaseIterable, Identifiable {
             return "list.bullet.rectangle.portrait"
         case .planning:
             return "sparkles"
+        case .reschedule:
+            return "calendar.badge.clock"
         }
     }
 }
@@ -23,6 +35,7 @@ enum AIAssistantAction: String, CaseIterable, Identifiable {
 @MainActor
 struct AIAssistantView: View {
     let tasks: [TodoItem]
+    let availableActions: [AIAssistantAction]
     let isLoading: Bool
     let errorMessage: String?
     let isActionEnabled: (AIAssistantAction) -> Bool
@@ -58,8 +71,15 @@ struct AIAssistantView: View {
 
     private var optionButtons: some View {
         VStack(alignment: .leading, spacing: 12) {
-            assistantOptionButton(for: .breakdown)
-            assistantOptionButton(for: .planning)
+            ForEach(availableActions) { action in
+                assistantOptionButton(for: action)
+            }
+
+            if let errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
 
             HStack {
                 Spacer()
@@ -78,18 +98,30 @@ struct AIAssistantView: View {
                 onLockedActionTap(action)
                 return
             }
+            if !action.requiresTaskSelection {
+                Task { @MainActor in
+                    await onRunAction(action, [], Date(), 0)
+                }
+                return
+            }
             selectedAction = action
             selectedTaskIDs.removeAll()
             dueDate = Date()
             estimatedHours = defaultEstimatedHours(for: action)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: action.systemImage)
-                    .font(.title3)
-                    .frame(width: 28)
+                if isLoading && action == .reschedule {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 28)
+                } else {
+                    Image(systemName: action.systemImage)
+                        .font(.title3)
+                        .frame(width: 28)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title(for: action))
+                    Text(isLoading && action == .reschedule ? localizationManager.text("calendar.reschedule.loading") : title(for: action))
                         .font(.headline)
                         .foregroundStyle(.primary)
 
@@ -108,6 +140,7 @@ struct AIAssistantView: View {
             .cornerRadius(10)
         }
         .buttonStyle(.plain)
+        .disabled(isLoading)
     }
 
     private func selectionView(for action: AIAssistantAction) -> some View {
@@ -130,48 +163,50 @@ struct AIAssistantView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(tasks) { task in
-                        Button {
-                            toggleSelection(for: task.id, allowsMultiple: action.allowsMultipleSelection)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: selectedTaskIDs.contains(task.id) ? "checkmark.square.fill" : "square")
-                                    .foregroundStyle(selectedTaskIDs.contains(task.id) ? Color.accentColor : .secondary)
+            if action.requiresTaskSelection {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(tasks) { task in
+                            Button {
+                                toggleSelection(for: task.id, allowsMultiple: action.allowsMultipleSelection)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: selectedTaskIDs.contains(task.id) ? "checkmark.square.fill" : "square")
+                                        .foregroundStyle(selectedTaskIDs.contains(task.id) ? Color.accentColor : .secondary)
 
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(task.title)
-                                        .foregroundStyle(.primary)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(task.title)
+                                            .foregroundStyle(.primary)
 
-                                    if let notes = task.notes, !notes.isEmpty {
-                                        Text(notes)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
+                                        if let notes = task.notes, !notes.isEmpty {
+                                            Text(notes)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
                                     }
-                                }
 
-                                Spacer()
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(Color.primary.opacity(0.04))
+                                .cornerRadius(8)
                             }
-                            .padding(12)
-                            .background(Color.primary.opacity(0.04))
-                            .cornerRadius(8)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-            }
-            .frame(minHeight: 220, maxHeight: 300)
+                .frame(minHeight: 220, maxHeight: 300)
 
-            DatePicker(
-                localizationManager.text("tasks.ai_plan.deadline"),
-                selection: $dueDate,
-                displayedComponents: [.date]
-            )
+                DatePicker(
+                    localizationManager.text("tasks.ai_plan.deadline"),
+                    selection: $dueDate,
+                    displayedComponents: [.date]
+                )
 
-            Stepper(value: $estimatedHours, in: 1...40) {
-                Text(localizationManager.format("tasks.ai_plan.estimated_hours_value", estimatedHours))
+                Stepper(value: $estimatedHours, in: 1...40) {
+                    Text(localizationManager.format("tasks.ai_plan.estimated_hours_value", estimatedHours))
+                }
             }
 
             if let errorMessage, !errorMessage.isEmpty {
@@ -198,14 +233,16 @@ struct AIAssistantView: View {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text(localizationManager.text("tasks.ai_plan.loading"))
+                            Text(action == .reschedule
+                                 ? localizationManager.text("calendar.reschedule.loading")
+                                 : localizationManager.text("tasks.ai_plan.loading"))
                         }
                     } else {
                         Text(buttonTitle(for: action))
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isLoading || selectedTaskIDs.isEmpty)
+                .disabled(isLoading || (action.requiresTaskSelection && selectedTaskIDs.isEmpty))
             }
         }
     }
@@ -231,6 +268,8 @@ struct AIAssistantView: View {
         case .planning:
             let totalMinutes = tasks.compactMap(\.durationMinutes).reduce(0, +)
             return max(1, totalMinutes / 60)
+        case .reschedule:
+            return 1
         }
     }
 
@@ -240,6 +279,8 @@ struct AIAssistantView: View {
             return localizationManager.text("tasks.ai_assistant.breakdown_title")
         case .planning:
             return localizationManager.text("tasks.ai_assistant.plan_title")
+        case .reschedule:
+            return localizationManager.text("calendar.ai_assistant.reschedule_title")
         }
     }
 
@@ -249,6 +290,8 @@ struct AIAssistantView: View {
             return localizationManager.text("tasks.ai_assistant.breakdown_description")
         case .planning:
             return localizationManager.text("tasks.ai_assistant.plan_description")
+        case .reschedule:
+            return localizationManager.text("calendar.ai_assistant.reschedule_description")
         }
     }
 
@@ -258,6 +301,8 @@ struct AIAssistantView: View {
             return localizationManager.text("tasks.ai_assistant.breakdown_run")
         case .planning:
             return localizationManager.text("tasks.ai_assistant.plan_run")
+        case .reschedule:
+            return localizationManager.text("calendar.ai_assistant.reschedule_title")
         }
     }
 
@@ -267,6 +312,8 @@ struct AIAssistantView: View {
             return localizationManager.text("tasks.ai_assistant.breakdown_prompt")
         case .planning:
             return localizationManager.text("tasks.ai_assistant.plan_prompt")
+        case .reschedule:
+            return localizationManager.text("calendar.ai_assistant.reschedule_description")
         }
     }
 }

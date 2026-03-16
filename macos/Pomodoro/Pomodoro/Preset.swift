@@ -54,4 +54,21 @@ struct Preset: Identifiable, Hashable {
     static func matching(durationConfig: DurationConfig) -> Preset? {
         builtIn.first { $0.durationConfig == durationConfig }
     }
+
+    static func matching(id: String?) -> Preset? {
+        guard let id else { return nil }
+        return builtIn.first { $0.id == id }
+    }
+
+    static var shortestBuiltIn: Preset {
+        builtIn.min { $0.durationConfig.workDuration < $1.durationConfig.workDuration } ?? builtIn[0]
+    }
+
+    static var middleBuiltIn: Preset {
+        builtIn.sorted { $0.durationConfig.workDuration < $1.durationConfig.workDuration }[min(1, builtIn.count - 1)]
+    }
+
+    static var longestBuiltIn: Preset {
+        builtIn.max { $0.durationConfig.workDuration < $1.durationConfig.workDuration } ?? builtIn[0]
+    }
 }

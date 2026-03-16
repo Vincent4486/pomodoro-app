@@ -102,11 +102,15 @@ final class FeatureGate: ObservableObject {
 
     var canUseAIPlanning: Bool {
         switch tier {
-        case .pro, .developer:
+        case .plus, .pro, .developer:
             return true
         default:
             return false
         }
+    }
+
+    func canUseAIScheduling() -> Bool {
+        tier == .pro || tier == .developer
     }
 
     var canUseAIAssistantBreakdown: Bool {
@@ -158,6 +162,8 @@ final class FeatureGate: ObservableObject {
             return canUseAIAssistantBreakdown
         case .planning:
             return canUseAIPlanning
+        case .reschedule:
+            return canUseAIScheduling()
         }
     }
 
@@ -171,7 +177,9 @@ final class FeatureGate: ObservableObject {
             case .breakdown:
                 return LocalizationManager.shared.text("tasks.ai_assistant.breakdown_requires_plus")
             case .planning:
-                return LocalizationManager.shared.text("tasks.ai_assistant.planning_requires_pro")
+                return LocalizationManager.shared.text("tasks.ai_assistant.planning_requires_plus")
+            case .reschedule:
+                return LocalizationManager.shared.text("calendar.ai_auto_schedule.requires_pro_title")
             }
         }
         if isAIQuotaExhausted {
@@ -182,7 +190,7 @@ final class FeatureGate: ObservableObject {
 
     var aiPlanningDisabledReason: String? {
         if !canUseAIPlanning {
-            return LocalizationManager.shared.text("tasks.ai_assistant.planning_requires_pro")
+            return LocalizationManager.shared.text("tasks.ai_assistant.planning_requires_plus")
         }
         if isAIQuotaExhausted {
             return aiActionDisabledReason

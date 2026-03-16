@@ -15,6 +15,12 @@ struct TodoSubtask: Identifiable, Codable, Equatable {
 /// Primary task data model for the app.
 /// Represents both internal todos and synced Apple Reminders.
 struct TodoItem: Identifiable, Codable, Equatable {
+    enum AIOrigin: String, Codable {
+        case planning
+        case breakdown
+        case calendarSchedule
+    }
+
     let id: UUID
     /// External identifier used for all cross-system sync. Format: pomodoroapp://task/<UUID>
     var externalId: String
@@ -40,6 +46,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var reminderIdentifier: String?
     var calendarEventIdentifier: String?
     var lastSyncedAt: Date?
+    var aiOrigin: AIOrigin?
+    var aiOrder: Int?
+    var pomodoroPresetID: String?
+    var plannedPomodoroCount: Int?
     
     enum SyncStatus: String, Codable {
         case local
@@ -50,7 +60,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var syncStatus: SyncStatus
     
     enum CodingKeys: String, CodingKey {
-        case id, externalId, title, notes, descriptionMarkdown, isCompleted, dueDate, hasDueTime, durationMinutes, priority, subtasks, createdAt, modifiedAt, tags, syncToCalendar, linkedCalendarEventId, reminderIdentifier, calendarEventIdentifier, lastSyncedAt, syncStatus
+        case id, externalId, title, notes, descriptionMarkdown, isCompleted, dueDate, hasDueTime, durationMinutes, priority, subtasks, createdAt, modifiedAt, tags, syncToCalendar, linkedCalendarEventId, reminderIdentifier, calendarEventIdentifier, lastSyncedAt, syncStatus, aiOrigin, aiOrder, pomodoroPresetID, plannedPomodoroCount
     }
     
     enum Priority: Int, Codable, CaseIterable {
@@ -89,6 +99,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
         reminderIdentifier: String? = nil,
         calendarEventIdentifier: String? = nil,
         lastSyncedAt: Date? = nil,
+        aiOrigin: AIOrigin? = nil,
+        aiOrder: Int? = nil,
+        pomodoroPresetID: String? = nil,
+        plannedPomodoroCount: Int? = nil,
         syncStatus: SyncStatus = .local
     ) {
         self.id = id
@@ -109,6 +123,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.reminderIdentifier = reminderIdentifier
         self.calendarEventIdentifier = calendarEventIdentifier
         self.lastSyncedAt = lastSyncedAt
+        self.aiOrigin = aiOrigin
+        self.aiOrder = aiOrder
+        self.pomodoroPresetID = pomodoroPresetID
+        self.plannedPomodoroCount = plannedPomodoroCount
         self.syncStatus = syncStatus
     }
     
@@ -138,6 +156,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
         reminderIdentifier = try container.decodeIfPresent(String.self, forKey: .reminderIdentifier)
         calendarEventIdentifier = try container.decodeIfPresent(String.self, forKey: .calendarEventIdentifier)
         lastSyncedAt = try container.decodeIfPresent(Date.self, forKey: .lastSyncedAt)
+        aiOrigin = try container.decodeIfPresent(AIOrigin.self, forKey: .aiOrigin)
+        aiOrder = try container.decodeIfPresent(Int.self, forKey: .aiOrder)
+        pomodoroPresetID = try container.decodeIfPresent(String.self, forKey: .pomodoroPresetID)
+        plannedPomodoroCount = try container.decodeIfPresent(Int.self, forKey: .plannedPomodoroCount)
         syncStatus = try container.decodeIfPresent(SyncStatus.self, forKey: .syncStatus) ?? .local
     }
     
@@ -166,6 +188,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(reminderIdentifier, forKey: .reminderIdentifier)
         try container.encodeIfPresent(calendarEventIdentifier, forKey: .calendarEventIdentifier)
         try container.encodeIfPresent(lastSyncedAt, forKey: .lastSyncedAt)
+        try container.encodeIfPresent(aiOrigin, forKey: .aiOrigin)
+        try container.encodeIfPresent(aiOrder, forKey: .aiOrder)
+        try container.encodeIfPresent(pomodoroPresetID, forKey: .pomodoroPresetID)
+        try container.encodeIfPresent(plannedPomodoroCount, forKey: .plannedPomodoroCount)
         try container.encode(syncStatus, forKey: .syncStatus)
     }
     

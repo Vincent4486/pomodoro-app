@@ -47,6 +47,10 @@
 "calendar.access_denied.body" = "查看你的事件和日程需要日历权限。可在 系统设置 -> 隐私与安全性 -> 日历 中开启。";
 "calendar.access_denied.title" = "日历权限被拒绝";
 "calendar.add_event" = "添加事件";
+"calendar.ai_assistant.reschedule_description" = "仅根据今天的日历安排重新整理今天的计划。";
+"calendar.ai_assistant.reschedule_title" = "重新整理今天";
+"calendar.ai_auto_schedule.requires_pro" = "AI 日历排程仅在 Pro 和 Developer 计划中提供。";
+"calendar.ai_auto_schedule.requires_pro_title" = "此功能需要 Pro 订阅。";
 "calendar.all_day" = "全天";
 "calendar.blocks" = "时间块";
 "calendar.delete_events.confirmation" = "删除 %d 个事件？";
@@ -64,6 +68,10 @@
 "calendar.no_events_today" = "今天无事件";
 "calendar.planned_mins" = "计划分钟数";
 "calendar.read_only_warning" = "所选事件中包含只读事件。";
+"calendar.reschedule.loading" = "正在重新整理今天…";
+"calendar.reschedule.toast_detail" = "已移动 %d 个专注时间块";
+"calendar.reschedule.toast_title" = "今天已重新整理";
+"calendar.reschedule.undo" = "撤销";
 "calendar.request_access" = "请求日历权限";
 "calendar.subtitle" = "查看日历时间块与到期任务。";
 "calendar.tasks" = "任务";

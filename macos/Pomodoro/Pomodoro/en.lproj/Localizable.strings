@@ -47,6 +47,10 @@
 "calendar.access_denied.body" = "Calendar access is required to view your events and schedules. You can enable it in System Settings -> Privacy & Security -> Calendar.";
 "calendar.access_denied.title" = "Calendar Access Denied";
 "calendar.add_event" = "Add Event";
+"calendar.ai_assistant.reschedule_description" = "Reorganize today's schedule around today's calendar.";
+"calendar.ai_assistant.reschedule_title" = "Reorganize Today";
+"calendar.ai_auto_schedule.requires_pro" = "AI Calendar Scheduling is available in Pro and Developer plans.";
+"calendar.ai_auto_schedule.requires_pro_title" = "This feature requires a Pro subscription.";
 "calendar.all_day" = "All day";
 "calendar.blocks" = "Blocks";
 "calendar.delete_events.confirmation" = "Delete %d events?";
@@ -64,6 +68,10 @@
 "calendar.no_events_today" = "No events today";
 "calendar.planned_mins" = "Planned mins";
 "calendar.read_only_warning" = "Some selected events are read-only.";
+"calendar.reschedule.loading" = "Reorganizing today…";
+"calendar.reschedule.toast_detail" = "%d focus blocks moved";
+"calendar.reschedule.toast_title" = "Today reorganized";
+"calendar.reschedule.undo" = "Undo";
 "calendar.request_access" = "Request Calendar Access";
 "calendar.subtitle" = "Review your calendar blocks and due tasks.";
 "calendar.tasks" = "Tasks";

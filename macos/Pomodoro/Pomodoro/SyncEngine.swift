@@ -129,65 +129,87 @@ final class SyncEngine {
     
     func syncCalendarEvents() async throws {
         let start = Date()
-        var stats = SyncStats()
         print("[SyncEngine] Calendar sync start at \(start)")
         
         try await ensureCalendarAccess()
         guard let store = todoStore else { return }
-        
-        let events = fetchUpcomingEvents()
-        stats.read = events.count
-        
-        var eventMap: [String: EKEvent] = [:]
-        events.forEach { event in
+
+        let rangeStart = Calendar.current.startOfDay(for: Date())
+        let rangeEnd = Calendar.current.date(byAdding: .day, value: 7, to: rangeStart) ?? rangeStart
+        let events = fetchEvents(from: rangeStart, end: rangeEnd)
+        var stats = SyncStats(read: events.count, written: 0, skipped: 0)
+
+        try reverseSyncCalendarEvents(events, store: store)
+        try handleDeletedCalendarEvents(events, store: store)
+
+        let busyBlocks = calendarBlocks(from: events)
+        let tasksToSchedule = store.items.filter {
+            $0.syncToCalendar && $0.calendarEventIdentifier == nil && ($0.durationMinutes ?? 25) >= 25
+        }
+        let schedulePlan = buildSchedulePlan(for: tasksToSchedule, busyBlocks: busyBlocks, rangeStart: rangeStart, rangeEnd: rangeEnd)
+        applySchedulePlan(schedulePlan, store: store)
+
+        let refreshedEvents = fetchEvents(from: rangeStart, end: rangeEnd)
+        var eventMapByIdentifier: [String: EKEvent] = [:]
+        var eventMapByExternalId: [String: EKEvent] = [:]
+        for event in refreshedEvents {
+            if let identifier = event.eventIdentifier {
+                eventMapByIdentifier[identifier] = event
+            }
             if let parsed = ExternalID.parse(from: event.notes),
-               (parsed.externalId.hasPrefix(ExternalID.eventPrefix) || parsed.externalId.hasPrefix(ExternalID.taskPrefix)) {
-                eventMap[parsed.externalId] = event
-            } else {
-                // Respect user control: do not import Calendar events that are not Pomodoro-managed.
-                stats.skipped += 1
+               parsed.externalId.hasPrefix(ExternalID.taskPrefix) {
+                eventMapByExternalId[parsed.externalId] = event
             }
         }
-        
-        for item in store.items {
-            guard item.syncToCalendar else { continue }
-            guard item.dueDate != nil else { continue }
-            
-            let externalId = item.externalId
-            let legacyExternalId = ExternalID.eventId(for: item.id)
-            if let existing = eventMap[externalId] ?? eventMap[legacyExternalId] {
+
+        for item in store.items where item.syncToCalendar {
+            var task = item
+            if task.externalId.isEmpty {
+                task.externalId = ExternalID.taskId(for: task.id)
+                store.updateItem(task)
+            }
+
+            guard let scheduledStart = task.dueDate else {
+                continue
+            }
+
+            let existing = task.calendarEventIdentifier.flatMap { eventMapByIdentifier[$0] } ?? eventMapByExternalId[task.externalId]
+            if let existing {
                 let remoteModified = existing.lastModifiedDate ?? existing.creationDate ?? .distantPast
-                if remoteModified > item.lastModified {
-                    var updated = item
+                if remoteModified > task.lastModified {
+                    var updated = task
                     updated.title = existing.title
                     updated.notes = ExternalID.parse(from: existing.notes)?.cleanNotes
-                    updated.dueDate = existing.startDate
-                    updated.hasDueTime = !existing.isAllDay
+                    updated.dueDate = existing.startDate ?? scheduledStart
+                    updated.hasDueTime = !(existing.isAllDay)
+                    updated.durationMinutes = eventDurationMinutes(for: existing, fallback: task.durationMinutes)
                     updated.calendarEventIdentifier = existing.eventIdentifier
                     updated.linkedCalendarEventId = existing.eventIdentifier
                     updated.lastModified = remoteModified
                     store.updateItem(updated)
-                    print("[SyncEngine][Calendar] remote wins for \(externalId)")
+                    print("[SyncEngine][Calendar] Imported newer calendar event for \(task.externalId)")
                 } else {
-                    try updateEvent(existing, with: item, externalId: externalId)
-                    var updated = item
+                    try updateEvent(existing, with: task, externalId: task.externalId)
+                    var updated = task
+                    updated.calendarEventIdentifier = existing.eventIdentifier
                     updated.linkedCalendarEventId = existing.eventIdentifier
+                    updated.lastModified = Date()
                     store.updateItem(updated)
-                    print("[SyncEngine][Calendar] local wins for \(externalId)")
+                    print("[SyncEngine][Calendar] Updated calendar event for \(task.externalId)")
                 }
                 stats.written += 1
             } else {
-                let eventId = try createEvent(from: item, externalId: externalId)
-                var updated = item
+                let eventId = try createEvent(from: task, externalId: task.externalId)
+                var updated = task
                 updated.calendarEventIdentifier = eventId
                 updated.linkedCalendarEventId = eventId
                 updated.lastModified = Date()
                 store.updateItem(updated)
-                print("[SyncEngine][Calendar] created remote for \(externalId)")
+                print("[SyncEngine][Calendar] Created calendar event for \(task.externalId)")
                 stats.written += 1
             }
         }
-        
+
         let duration = Date().timeIntervalSince(start)
         print("[SyncEngine] Calendar sync end. read: \(stats.read) written: \(stats.written) skipped: \(stats.skipped) duration: \(String(format: "%.2f", duration))s")
     }
@@ -359,12 +381,193 @@ final class SyncEngine {
     
     // MARK: - Calendar Helpers
     
-    private func fetchUpcomingEvents() -> [EKEvent] {
-        let now = Date()
-        let start = Calendar.current.date(byAdding: .month, value: -1, to: now) ?? now
-        let end = Calendar.current.date(byAdding: .month, value: 12, to: now) ?? now
+    private func fetchEvents(from start: Date, end: Date) -> [EKEvent] {
         let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
-        return eventStore.events(matching: predicate)
+        return eventStore.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+    }
+
+    private func calendarBlocks(from events: [EKEvent]) -> [CalendarBlock] {
+        events.compactMap { event in
+            guard let start = event.startDate, let end = event.endDate, end > start else { return nil }
+            return CalendarBlock(start: start, end: end, title: event.title ?? "Busy")
+        }
+    }
+
+    private func freeSlots(from busyBlocks: [CalendarBlock], rangeStart: Date, rangeEnd: Date) -> [FreeTimeSlot] {
+        guard rangeEnd > rangeStart else { return [] }
+        let minimumDuration: TimeInterval = 25 * 60
+        let sortedBlocks = busyBlocks.sorted { $0.start < $1.start }
+        var cursor = rangeStart
+        var slots: [FreeTimeSlot] = []
+
+        for block in sortedBlocks {
+            if block.end <= cursor { continue }
+            if block.start > cursor {
+                let candidateEnd = min(block.start, rangeEnd)
+                if candidateEnd.timeIntervalSince(cursor) >= minimumDuration {
+                    slots.append(FreeTimeSlot(start: cursor, end: candidateEnd))
+                }
+            }
+            cursor = max(cursor, block.end)
+            if cursor >= rangeEnd { break }
+        }
+
+        if rangeEnd.timeIntervalSince(cursor) >= minimumDuration {
+            slots.append(FreeTimeSlot(start: cursor, end: rangeEnd))
+        }
+        return slots
+    }
+
+    private func buildSchedulePlan(
+        for tasks: [TodoItem],
+        busyBlocks: [CalendarBlock],
+        rangeStart: Date,
+        rangeEnd: Date
+    ) -> SchedulingPlan {
+        var availableSlots = freeSlots(from: busyBlocks, rangeStart: rangeStart, rangeEnd: rangeEnd)
+        let sortedTasks = tasks.sorted { lhs, rhs in
+            let lhsPriority = lhs.priority.rawValue
+            let rhsPriority = rhs.priority.rawValue
+            if lhsPriority != rhsPriority {
+                return lhsPriority > rhsPriority
+            }
+            let lhsDeadline = schedulingDeadline(for: lhs) ?? .distantFuture
+            let rhsDeadline = schedulingDeadline(for: rhs) ?? .distantFuture
+            return lhsDeadline < rhsDeadline
+        }
+
+        var entries: [SchedulingPlan.Entry] = []
+
+        for task in sortedTasks {
+            let durationMinutes = max(25, task.durationMinutes ?? 25)
+            let duration = TimeInterval(durationMinutes * 60)
+            let deadline = schedulingDeadline(for: task) ?? rangeEnd
+
+            for index in availableSlots.indices {
+                let slot = availableSlots[index]
+                let proposedStart = max(slot.start, rangeStart)
+                let proposedEnd = proposedStart.addingTimeInterval(duration)
+                guard proposedEnd <= slot.end, proposedEnd <= deadline else { continue }
+
+                let pomodoros = max(1, Int(ceil(Double(durationMinutes) / 25.0)))
+                entries.append(
+                    SchedulingPlan.Entry(
+                        taskTitle: task.title,
+                        taskId: task.id.uuidString,
+                        start: proposedStart,
+                        end: proposedEnd,
+                        pomodoros: pomodoros
+                    )
+                )
+
+                if proposedEnd < slot.end {
+                    availableSlots[index] = FreeTimeSlot(start: proposedEnd, end: slot.end)
+                } else {
+                    availableSlots.remove(at: index)
+                }
+                break
+            }
+        }
+
+        return SchedulingPlan(schedule: entries)
+    }
+
+    private func applySchedulePlan(_ plan: SchedulingPlan, store: TodoStore) {
+        for entry in plan.schedule {
+            guard let taskID = UUID(uuidString: entry.taskId),
+                  let existing = store.items.first(where: { $0.id == taskID }) else {
+                continue
+            }
+
+            var updated = existing
+            updated.dueDate = entry.start
+            updated.hasDueTime = true
+            updated.durationMinutes = max(existing.durationMinutes ?? 25, Int(entry.end.timeIntervalSince(entry.start) / 60))
+            updated.lastModified = Date()
+            store.updateItem(updated)
+            print("[SyncEngine][Calendar] Scheduled task '\(updated.title)' from \(entry.start) to \(entry.end)")
+        }
+    }
+
+    private func reverseSyncCalendarEvents(_ events: [EKEvent], store: TodoStore) throws {
+        for event in events {
+            guard let parsed = ExternalID.parse(from: event.notes),
+                  parsed.externalId.hasPrefix(ExternalID.taskPrefix) else {
+                continue
+            }
+
+            let eventIdentifier = event.eventIdentifier
+            let remoteModified = event.lastModifiedDate ?? event.creationDate ?? .distantPast
+            if let local = store.items.first(where: {
+                $0.calendarEventIdentifier == eventIdentifier || $0.externalId == parsed.externalId
+            }) {
+                guard remoteModified > local.lastModified else { continue }
+
+                var updated = local
+                updated.title = event.title
+                updated.notes = parsed.cleanNotes
+                updated.dueDate = event.startDate
+                updated.hasDueTime = !event.isAllDay
+                updated.durationMinutes = eventDurationMinutes(for: event, fallback: local.durationMinutes)
+                updated.calendarEventIdentifier = eventIdentifier
+                updated.linkedCalendarEventId = eventIdentifier
+                updated.syncToCalendar = true
+                updated.lastModified = remoteModified
+                store.updateItem(updated)
+                print("[SyncEngine][Calendar] Imported event change for \(parsed.externalId)")
+            } else if let taskId = uuid(from: parsed.externalId, expectedPrefix: ExternalID.taskPrefix) {
+                let newTask = TodoItem(
+                    id: taskId,
+                    externalId: parsed.externalId,
+                    title: event.title,
+                    notes: parsed.cleanNotes,
+                    isCompleted: false,
+                    dueDate: event.startDate,
+                    hasDueTime: !event.isAllDay,
+                    durationMinutes: eventDurationMinutes(for: event, fallback: nil),
+                    syncToCalendar: true,
+                    linkedCalendarEventId: eventIdentifier,
+                    calendarEventIdentifier: eventIdentifier,
+                    syncStatus: .synced
+                )
+                store.addItem(newTask)
+                print("[SyncEngine][Calendar] Created local task from calendar event \(parsed.externalId)")
+            }
+        }
+    }
+
+    private func handleDeletedCalendarEvents(_ events: [EKEvent], store: TodoStore) throws {
+        let existingIdentifiers = Set(events.compactMap(\.eventIdentifier))
+        for item in store.items where item.syncToCalendar && item.calendarEventIdentifier != nil {
+            guard let identifier = item.calendarEventIdentifier,
+                  !existingIdentifiers.contains(identifier) else {
+                continue
+            }
+
+            var updated = item
+            updated.dueDate = nil
+            updated.hasDueTime = false
+            updated.calendarEventIdentifier = nil
+            updated.linkedCalendarEventId = nil
+            updated.syncToCalendar = false
+            updated.lastModified = Date()
+            store.updateItem(updated)
+            print("[SyncEngine][Calendar] Event deleted remotely, task unscheduled: \(item.title)")
+        }
+    }
+
+    private func schedulingDeadline(for item: TodoItem) -> Date? {
+        guard let dueDate = item.dueDate else { return nil }
+        if item.hasDueTime {
+            return dueDate
+        }
+        return Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: dueDate))
+    }
+
+    private func eventDurationMinutes(for event: EKEvent, fallback: Int?) -> Int? {
+        guard let start = event.startDate, let end = event.endDate else { return fallback }
+        let minutes = Int(end.timeIntervalSince(start) / 60)
+        return max(25, minutes)
     }
     
     private func createEvent(from item: TodoItem, externalId: String) throws -> String {
@@ -440,23 +643,49 @@ final class SyncEngine {
         var written = 0
         var skipped = 0
     }
+
+    struct CalendarBlock: Equatable {
+        let start: Date
+        let end: Date
+        let title: String
+    }
+
+    struct FreeTimeSlot: Equatable {
+        let start: Date
+        let end: Date
+    }
+
+    struct SchedulingPlan: Codable, Equatable {
+        struct Entry: Codable, Equatable {
+            let taskTitle: String
+            let taskId: String
+            let start: Date
+            let end: Date
+            let pomodoros: Int
+        }
+
+        let schedule: [Entry]
+    }
     
     enum SyncError: LocalizedError {
         case notAuthorized
         case noReminderCalendar
         case reminderSaveFailed(String, String)
         case partialReminderSyncFailed(String)
+        case noCalendarAvailable
 
         var errorDescription: String? {
             switch self {
             case .notAuthorized:
-                return "Reminders access not authorized."
+                return "Calendar or Reminders access not authorized."
             case .noReminderCalendar:
                 return "No default reminders calendar is available."
             case let .reminderSaveFailed(title, message):
                 return "Reminder save failed for '\(title)': \(message)"
             case let .partialReminderSyncFailed(message):
                 return message
+            case .noCalendarAvailable:
+                return "No default calendar is available."
             }
         }
     }

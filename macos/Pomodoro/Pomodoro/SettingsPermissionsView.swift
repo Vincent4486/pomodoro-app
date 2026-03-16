@@ -155,11 +155,9 @@ struct SettingsPermissionsView: View {
                     value: currentPlanLabel
                 )
 
-                if featureGate.tier == .free {
-                    Text(localizationManager.text("settings.ai_usage.upgrade_message"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else if let subscriptionEndAt = featureGate.subscriptionEndAt,
+                aiPlanningContent
+
+                if let subscriptionEndAt = featureGate.subscriptionEndAt,
                           featureGate.tier == .plus || featureGate.tier == .pro {
                     statusRow(
                         label: localizationManager.text("settings.ai_subscription.subscription_ends"),
@@ -174,9 +172,9 @@ struct SettingsPermissionsView: View {
                     )
                 }
 
-                if featureGate.canUseCloudProxyAI {
+                if !displayedAIUsageProgressItems.isEmpty {
                     VStack(spacing: 14) {
-                        ForEach(featureGate.aiUsageProgressItems, id: \.title) { item in
+                        ForEach(displayedAIUsageProgressItems, id: \.title) { item in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(item.title)
                                     .font(.subheadline.weight(.medium))
@@ -196,6 +194,68 @@ struct SettingsPermissionsView: View {
         .padding(16)
         .background(Color.primary.opacity(0.05))
         .cornerRadius(12)
+    }
+
+    @ViewBuilder
+    private var aiPlanningContent: some View {
+        switch aiPlanningDisplayMode {
+        case .upgrade:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localizationManager.text("settings.ai_planning.title"))
+                    .font(.subheadline.weight(.semibold))
+
+                Text(localizationManager.text("settings.ai_planning.free_description"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Button(localizationManager.text("tasks.ai_assistant.upgrade")) {
+                    openUpgradePage()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        case .deepSeek:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localizationManager.text("settings.ai_planning.title"))
+                    .font(.subheadline.weight(.semibold))
+
+                statusRow(
+                    label: localizationManager.text("settings.ai_planning.available_model"),
+                    value: "DeepSeek"
+                )
+            }
+        case .deepSeekAndGemini:
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localizationManager.text("settings.ai_planning.title"))
+                    .font(.subheadline.weight(.semibold))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    modelRow("Gemini")
+                    modelRow("DeepSeek")
+                }
+            }
+        }
+    }
+
+    private var displayedAIUsageProgressItems: [FeatureGate.AIUsageProgress] {
+        switch aiPlanningDisplayMode {
+        case .upgrade:
+            return []
+        case .deepSeek:
+            return featureGate.aiUsageProgressItems.filter { $0.title == "DeepSeek" }
+        case .deepSeekAndGemini:
+            return featureGate.aiUsageProgressItems.filter { $0.title == "DeepSeek" || $0.title == "Gemini Flash" }
+        }
+    }
+
+    private var aiPlanningDisplayMode: AIPlanningDisplayMode {
+        switch featureGate.tier {
+        case .plus, .beta:
+            return .deepSeek
+        case .pro, .developer:
+            return .deepSeekAndGemini
+        case .free, .expired:
+            return .upgrade
+        }
     }
 
     private func usageColor(for ratio: Double) -> Color {
@@ -230,6 +290,11 @@ struct SettingsPermissionsView: View {
         date.formatted(date: .long, time: .omitted)
     }
 
+    private func openUpgradePage() {
+        guard let url = URL(string: "https://pomodoro-app.tech") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     @ViewBuilder
     private func statusRow(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -237,6 +302,18 @@ struct SettingsPermissionsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+        }
+    }
+
+    @ViewBuilder
+    private func modelRow(_ title: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(title)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.primary)
         }
@@ -294,6 +371,12 @@ struct SettingsPermissionsView: View {
             }
         }
     }
+}
+
+private enum AIPlanningDisplayMode {
+    case upgrade
+    case deepSeek
+    case deepSeekAndGemini
 }
 
 #Preview {

@@ -10,6 +10,7 @@ import EventKit
 import SwiftUI
 import UserNotifications
 import Charts
+import FirebaseFunctions
 
 @MainActor
 struct MainWindowView: View {
@@ -17,6 +18,7 @@ struct MainWindowView: View {
     @EnvironmentObject private var musicController: MusicController
     @EnvironmentObject private var audioSourceStore: AudioSourceStore
     @EnvironmentObject private var languageManager: LanguageManager
+    @EnvironmentObject private var authViewModel: AuthViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workMinutesText = ""
     @State private var shortBreakMinutesText = ""
@@ -40,6 +42,11 @@ struct MainWindowView: View {
     @State private var ambientSliderEditing = false
     @State private var ambientSliderHover = false
     @State private var systemSliderHover = false
+    @State private var isCheckingPlans = false
+    @State private var showPlansPaywall = false
+    @State private var plansErrorMessage: String?
+    @State private var showPlansModePicker = false
+    @State private var availablePlanModes: [YourPlansMode] = []
     
     // New: Calendar, Reminders, and Todo system
     @StateObject private var permissionsManager = PermissionsManager.shared
@@ -47,6 +54,13 @@ struct MainWindowView: View {
     @StateObject private var planningStore = PlanningStore()
     @StateObject private var remindersSync = RemindersSync(permissionsManager: PermissionsManager.shared)
     @StateObject private var calendarManager = CalendarManager(permissionsManager: PermissionsManager.shared)
+
+    private enum YourPlansMode: String, Identifiable {
+        case plannedTasks
+        case todayCalendarPlan
+
+        var id: String { rawValue }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -139,6 +153,38 @@ struct MainWindowView: View {
             }
         }
         .background(WindowBackgroundConfigurator())
+        .sheet(isPresented: $showPlansPaywall) {
+            yourPlansPaywallSheet
+        }
+        .alert("Your Plans", isPresented: Binding(
+            get: { plansErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    plansErrorMessage = nil
+                }
+            }
+        )) {
+            Button("OK", role: .cancel) {
+                plansErrorMessage = nil
+            }
+        } message: {
+            Text(plansErrorMessage ?? "")
+        }
+        .confirmationDialog("Your Plans", isPresented: $showPlansModePicker, titleVisibility: .visible) {
+            if availablePlanModes.contains(.plannedTasks) {
+                Button("Run Planned Tasks") {
+                    runYourPlans(.plannedTasks)
+                }
+            }
+            if availablePlanModes.contains(.todayCalendarPlan) {
+                Button("Run Today's Schedule") {
+                    runYourPlans(.todayCalendarPlan)
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Choose which AI-generated plan to run.")
+        }
         // macOS 26 adds an opaque toolbar strip; hide that layer so the wallpaper blur flows
         // into the title bar while keeping native window controls intact.
         .toolbarBackground(.hidden, for: .windowToolbar)
@@ -276,6 +322,30 @@ struct MainWindowView: View {
                 ActionButton(languageManager.text("timer.skip_break"), isEnabled: actions.canSkipBreak) {
                     appState.pomodoro.skipBreak()
                 }
+                Button {
+                    Task {
+                        await checkSubscription()
+                    }
+                } label: {
+                    if isCheckingPlans {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Your Plans")
+                        }
+                    } else {
+                        Text("Your Plans")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isCheckingPlans)
+            }
+
+            if let planTitle = appState.currentPlanTitle,
+               let pomodoroCount = appState.currentPlanPomodoros {
+                Text("\(planTitle) • \(pomodoroCount) Pomodoros")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.top, 28)
@@ -1419,6 +1489,144 @@ struct MainWindowView: View {
                 canSkipBreak: true
             )
         }
+    }
+
+    private var yourPlansPaywallSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Your Plans requires Plus")
+                .font(.title3.weight(.semibold))
+
+            Text("Upgrade to Plus or Pro to start Pomodoro sessions from your planned tasks.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button("Cancel") {
+                    showPlansPaywall = false
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Upgrade") {
+                    openPricingPage()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
+    }
+
+    private func openPricingPage() {
+        guard let url = URL(string: "https://pomodoro-app.tech") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func checkSubscription() async {
+        isCheckingPlans = true
+        defer { isCheckingPlans = false }
+
+        do {
+            let functions = Functions.functions(region: "us-central1")
+            let callable = functions.httpsCallable("verifySubscription")
+            let result = try await callable.call()
+            guard let payload = result.data as? [String: Any] else {
+                plansErrorMessage = "Unable to verify subscription."
+                return
+            }
+
+            let allowed = payload["allowed"] as? Bool ?? false
+            if !allowed {
+                showPlansPaywall = true
+                return
+            }
+
+            let plannedEntries = plannedTaskEntries()
+            let calendarEntries = todayCalendarPlanEntries()
+
+            if plannedEntries.isEmpty && calendarEntries.isEmpty {
+                plansErrorMessage = "No runnable AI plans found."
+                return
+            }
+
+            if !plannedEntries.isEmpty && !calendarEntries.isEmpty {
+                availablePlanModes = [.plannedTasks, .todayCalendarPlan]
+                showPlansModePicker = true
+                return
+            }
+
+            runYourPlans(plannedEntries.isEmpty ? .todayCalendarPlan : .plannedTasks)
+        } catch {
+            plansErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func runYourPlans(_ mode: YourPlansMode) {
+        let entries: [AppState.PlanExecutionEntry]
+        switch mode {
+        case .plannedTasks:
+            entries = plannedTaskEntries()
+        case .todayCalendarPlan:
+            entries = todayCalendarPlanEntries()
+        }
+
+        guard !entries.isEmpty else {
+            plansErrorMessage = mode == .plannedTasks
+                ? "No AI task plans available to run."
+                : "No AI calendar plan found for today."
+            return
+        }
+
+        showPlansModePicker = false
+        availablePlanModes = []
+        appState.startExecutionPlan(entries)
+    }
+
+    private func plannedTaskEntries() -> [AppState.PlanExecutionEntry] {
+        todoStore.pendingItems
+            .filter { !$0.isCompleted && $0.aiOrigin == .planning }
+            .sorted { left, right in
+                let leftOrder = left.aiOrder ?? Int.max
+                let rightOrder = right.aiOrder ?? Int.max
+                if leftOrder != rightOrder {
+                    return leftOrder < rightOrder
+                }
+                if let leftDue = left.dueDate, let rightDue = right.dueDate, leftDue != rightDue {
+                    return leftDue < rightDue
+                }
+                return left.createdAt < right.createdAt
+            }
+            .map { item in
+                AppState.PlanExecutionEntry(
+                    id: item.id,
+                    title: item.title,
+                    pomodoros: max(1, item.plannedPomodoroCount ?? item.pomodoroEstimate ?? 1),
+                    pomodoroPresetID: item.pomodoroPresetID
+                )
+            }
+    }
+
+    private func todayCalendarPlanEntries() -> [AppState.PlanExecutionEntry] {
+        let calendar = Calendar.current
+        return todoStore.pendingItems
+            .filter { item in
+                guard !item.isCompleted,
+                      item.aiOrigin == .calendarSchedule,
+                      let dueDate = item.dueDate else {
+                    return false
+                }
+                return calendar.isDateInToday(dueDate)
+            }
+            .sorted { ($0.dueDate ?? $0.createdAt) < ($1.dueDate ?? $1.createdAt) }
+            .map { item in
+                AppState.PlanExecutionEntry(
+                    id: item.id,
+                    title: item.title,
+                    pomodoros: max(1, item.plannedPomodoroCount ?? item.pomodoroEstimate ?? 1),
+                    pomodoroPresetID: item.pomodoroPresetID
+                )
+            }
     }
 
     private func countdownActions(for state: TimerState) -> CountdownActionAvailability {

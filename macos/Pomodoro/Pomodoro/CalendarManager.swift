@@ -10,6 +10,7 @@ final class CalendarManager: ObservableObject {
     private let permissionsManager: PermissionsManager
     
     @Published var events: [EKEvent] = []
+    @Published var aiFreeSlots: [AIService.FreeSlot] = []
     @Published var isLoading: Bool = false
     @Published var error: String?
     
@@ -42,6 +43,17 @@ final class CalendarManager: ObservableObject {
         let fetchedEvents = eventStore.events(matching: predicate)
         events = fetchedEvents.sorted { $0.startDate < $1.startDate }
         error = nil
+    }
+
+    func readEvents(from startDate: Date, to endDate: Date) -> [EKEvent] {
+        guard isAuthorized else { return [] }
+        let calendars = eventStore.calendars(for: .event)
+        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: calendars)
+        return eventStore.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+    }
+
+    func updateAIFreeSlots(_ slots: [AIService.FreeSlot]) {
+        aiFreeSlots = slots.sorted { $0.start < $1.start }
     }
     
     /// Fetch events for today

@@ -31,6 +31,9 @@ final class AppState: ObservableObject {
 
     @Published private(set) var pomodoroMode: PomodoroTimerEngine.Mode
     @Published private(set) var pomodoroCurrentMode: PomodoroTimerEngine.CurrentMode
+    @Published private(set) var currentPlanTitle: String?
+    @Published private(set) var currentPlanPomodoros: Int?
+    @Published private(set) var currentPlanPresetID: String?
     @Published private(set) var dailyStats: DailyStats
     @Published var notificationPreference: NotificationPreference {
         didSet {
@@ -70,6 +73,15 @@ final class AppState: ObservableObject {
     private var currentBreakDurationSeconds: Int?
     private var hasRequestedNotificationAuthorization: Bool = false
     private let eventStore = SharedEventStore.shared.eventStore
+    private var pendingExecutionQueue: [PlanExecutionEntry] = []
+    private var activeExecutionEntry: PlanExecutionEntry?
+
+    struct PlanExecutionEntry: Identifiable, Equatable {
+        let id: UUID
+        let title: String
+        let pomodoros: Int
+        let pomodoroPresetID: String?
+    }
 
     // Designated initializer - no default arguments to avoid linker symbol issues
     @MainActor
@@ -242,6 +254,30 @@ final class AppState: ObservableObject {
         pomodoro.start()
     }
 
+    func applyPlan(title: String, pomodoroCount: Int, pomodoroPresetID: String? = nil) {
+        currentPlanTitle = title
+        currentPlanPomodoros = max(1, pomodoroCount)
+        currentPlanPresetID = pomodoroPresetID
+    }
+
+    func startExecutionPlan(_ entries: [PlanExecutionEntry]) {
+        guard let first = entries.first else { return }
+        pendingExecutionQueue = Array(entries.dropFirst())
+        activeExecutionEntry = first
+        pomodoro.reset()
+        applyExecutionPreset(first.pomodoroPresetID)
+        applyPlan(title: first.title, pomodoroCount: first.pomodoros, pomodoroPresetID: first.pomodoroPresetID)
+        pomodoro.start()
+    }
+
+    func clearExecutionPlan() {
+        pendingExecutionQueue = []
+        activeExecutionEntry = nil
+        currentPlanTitle = nil
+        currentPlanPomodoros = nil
+        currentPlanPresetID = nil
+    }
+
     func startOrPausePomodoro() {
         switch pomodoro.state {
         case .idle:
@@ -266,6 +302,7 @@ final class AppState: ObservableObject {
 
     func resetPomodoro() {
         pomodoro.reset()
+        clearExecutionPlan()
     }
 
     func startBreak() {
@@ -463,12 +500,16 @@ final class AppState: ObservableObject {
                 currentFocusDurationSeconds = durationConfig.workDuration
                 refreshDailyStatsForCurrentDay()
             }
+            if previousState == .breakRunning || previousState == .breakPaused {
+                currentFocusDurationSeconds = durationConfig.workDuration
+            }
         case .breakRunning:
             if previousState == .running || previousState == .paused {
                 if pomodoroDidReachZero {
                     sendPomodoroCompletionNotification()
                     showTransitionPopup(message: transitionMessageForBreakStart())
                     logFocusSessionIfNeeded()
+                    advanceExecutionPlanAfterCompletedSession()
                 }
                 pomodoroDidReachZero = false
             }
@@ -493,6 +534,33 @@ final class AppState: ObservableObject {
         }
 
         lastPomodoroState = state
+    }
+
+    private func advanceExecutionPlanAfterCompletedSession() {
+        guard let current = activeExecutionEntry else { return }
+        let remainingPomodoros = max(0, (currentPlanPomodoros ?? current.pomodoros) - 1)
+
+        if remainingPomodoros > 0 {
+            currentPlanPomodoros = remainingPomodoros
+            return
+        }
+
+        if let next = pendingExecutionQueue.first {
+            pendingExecutionQueue.removeFirst()
+            activeExecutionEntry = next
+            applyExecutionPreset(next.pomodoroPresetID)
+            applyPlan(title: next.title, pomodoroCount: next.pomodoros, pomodoroPresetID: next.pomodoroPresetID)
+            return
+        }
+
+        clearExecutionPlan()
+        pomodoro.skipBreak()
+    }
+
+    private func applyExecutionPreset(_ presetID: String?) {
+        guard let preset = Preset.matching(id: presetID) else { return }
+        presetSelection = .preset(preset)
+        durationConfig = preset.durationConfig
     }
 
     private func handleCountdownRemaining(_ seconds: Int) {

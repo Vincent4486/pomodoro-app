@@ -8,11 +8,15 @@ final class AuthViewModel: ObservableObject {
 
     @Published private(set) var currentUser: User?
     @Published private(set) var isLoading = false
+    @Published private(set) var isPreparingPurchase = false
+    @Published private(set) var hasValidPurchaseToken = false
+    @Published var isPurchaseLoginPromptPresented = false
     @Published var errorMessage: String?
 
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private var auth: Auth?
     private let authManager: AuthManager
+    private var purchaseTokenWarmupTask: Task<Void, Never>?
 
     private init() {
         authManager = .shared
@@ -20,12 +24,14 @@ final class AuthViewModel: ObservableObject {
             let auth = Auth.auth()
             self.auth = auth
             currentUser = auth.currentUser
+            hasValidPurchaseToken = false
         } else {
             currentUser = nil
         }
     }
 
     deinit {
+        purchaseTokenWarmupTask?.cancel()
         if let authStateListener, let auth {
             auth.removeStateDidChangeListener(authStateListener)
         }
@@ -51,6 +57,10 @@ final class AuthViewModel: ObservableObject {
         currentUser?.email ?? ""
     }
 
+    var canStartPurchase: Bool {
+        isAuthenticated && !isLoading && !isPreparingPurchase && hasValidPurchaseToken
+    }
+
     func startListeningIfNeeded() {
         guard authStateListener == nil else { return }
         guard FirebaseApp.app() != nil else { return }
@@ -63,7 +73,7 @@ final class AuthViewModel: ObservableObject {
         authStateListener = auth.addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor [weak self] in
                 await Task.yield()
-                self?.currentUser = user
+                self?.handleAuthStateChange(user)
             }
         }
     }
@@ -152,6 +162,44 @@ final class AuthViewModel: ObservableObject {
     }
 
     @MainActor
+    func preparePurchaseReadiness() async {
+        startListeningIfNeeded()
+        purchaseTokenWarmupTask?.cancel()
+
+        guard currentUser != nil else {
+            hasValidPurchaseToken = false
+            isPreparingPurchase = false
+            return
+        }
+
+        purchaseTokenWarmupTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = try? await self.refreshPurchaseToken(forceRefresh: false)
+        }
+    }
+
+    @MainActor
+    func prepareForPurchase() async throws -> String {
+        startListeningIfNeeded()
+
+        guard isAuthenticated else {
+            isPurchaseLoginPromptPresented = true
+            throw AuthViewModelError.purchaseAuthenticationRequired
+        }
+
+        guard !isLoading else {
+            throw AuthViewModelError.purchaseStateLoading
+        }
+
+        return try await refreshPurchaseToken(forceRefresh: true)
+    }
+
+    @MainActor
+    func dismissPurchaseLoginPrompt() {
+        isPurchaseLoginPromptPresented = false
+    }
+
+    @MainActor
     private func performAuthFlow(_ operation: () async throws -> Void) async throws {
         startListeningIfNeeded()
         let auth = try currentAuth()
@@ -162,10 +210,52 @@ final class AuthViewModel: ObservableObject {
 
         do {
             try await operation()
-            currentUser = auth.currentUser
+            handleAuthStateChange(auth.currentUser)
             errorMessage = nil
         } catch {
             errorMessage = (error as NSError).localizedDescription
+            throw error
+        }
+    }
+
+    @MainActor
+    private func handleAuthStateChange(_ user: User?) {
+        currentUser = user
+        isPurchaseLoginPromptPresented = false
+        purchaseTokenWarmupTask?.cancel()
+
+        guard user != nil else {
+            hasValidPurchaseToken = false
+            isPreparingPurchase = false
+            return
+        }
+
+        hasValidPurchaseToken = false
+        purchaseTokenWarmupTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = try? await self.refreshPurchaseToken(forceRefresh: false)
+        }
+    }
+
+    @MainActor
+    private func refreshPurchaseToken(forceRefresh: Bool) async throws -> String {
+        isPreparingPurchase = true
+        defer { isPreparingPurchase = false }
+
+        do {
+            let token: String
+            if forceRefresh {
+                guard let user = currentUser else {
+                    throw AuthViewModelError.purchaseAuthenticationRequired
+                }
+                token = try await getIDToken(for: user, forceRefresh: true)
+            } else {
+                token = try await getValidIDToken()
+            }
+            hasValidPurchaseToken = !token.isEmpty
+            return token
+        } catch {
+            hasValidPurchaseToken = false
             throw error
         }
     }
@@ -281,6 +371,8 @@ final class AuthViewModel: ObservableObject {
         case invalidEmailAddress
         case notAuthenticated
         case missingToken
+        case purchaseAuthenticationRequired
+        case purchaseStateLoading
 
         var errorDescription: String? {
             switch self {
@@ -302,6 +394,10 @@ final class AuthViewModel: ObservableObject {
                 return LocalizationManager.shared.text("auth.error.authentication_required")
             case .missingToken:
                 return LocalizationManager.shared.text("auth.error.missing_firebase_id_token")
+            case .purchaseAuthenticationRequired:
+                return "Please sign in before purchasing"
+            case .purchaseStateLoading:
+                return "Preparing your account. Please wait."
             }
         }
     }

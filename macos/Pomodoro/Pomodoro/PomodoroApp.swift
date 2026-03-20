@@ -21,11 +21,15 @@ struct PomodoroApp: App {
     @StateObject private var onboardingState: OnboardingState
     @StateObject private var authViewModel: AuthViewModel
     @StateObject private var languageManager: LanguageManager
+    @StateObject private var fullscreenFocusBackdropStore: FullscreenFocusBackdropStore
+    @StateObject private var flowWindowManager: FlowWindowManager
 
     init() {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
+
+        SubscriptionStore.shared.start()
 
         let appState = AppState()
         let musicController = MusicController(ambientNoiseEngine: appState.ambientNoiseEngine)
@@ -43,6 +47,8 @@ struct PomodoroApp: App {
         _onboardingState = StateObject(wrappedValue: OnboardingState())
         _authViewModel = StateObject(wrappedValue: AuthViewModel.shared)
         _languageManager = StateObject(wrappedValue: LanguageManager.shared)
+        _fullscreenFocusBackdropStore = StateObject(wrappedValue: FullscreenFocusBackdropStore())
+        _flowWindowManager = StateObject(wrappedValue: FlowWindowManager())
     }
 
     var body: some Scene {
@@ -167,6 +173,8 @@ struct PomodoroApp: App {
             .environmentObject(onboardingState)
             .environmentObject(authViewModel)
             .environmentObject(languageManager)
+            .environmentObject(fullscreenFocusBackdropStore)
+            .environmentObject(flowWindowManager)
             .background(MainWindowSceneOpenerBridge(onRegister: { action in
                 appDelegate.registerMainWindowSceneOpener(action)
             }))
@@ -177,16 +185,25 @@ struct PomodoroApp: App {
                 appDelegate.audioSourceStore = audioSourceStore
                 appDelegate.onboardingState = onboardingState
                 appDelegate.authViewModel = authViewModel
+                flowWindowManager.configure(
+                    appState: appState,
+                    musicController: musicController,
+                    audioSourceStore: audioSourceStore,
+                    onboardingState: onboardingState,
+                    authViewModel: authViewModel,
+                    languageManager: languageManager,
+                    fullscreenFocusBackdropStore: fullscreenFocusBackdropStore
+                )
             }
             .onAppear {
-                enforceMaximizeOnlyWindows()
+                enforceWindowedMainWindow()
             }
             .onReceive(
                 NotificationCenter.default.publisher(
                     for: NSApplication.willUpdateNotification
                 )
             ) { _ in
-                enforceMaximizeOnlyWindows()
+                enforceWindowedMainWindow()
             }
 
         content.environment(\.locale, languageManager.effectiveLocale)
@@ -245,9 +262,11 @@ struct PomodoroApp: App {
         NotificationCenter.default.post(name: notification, object: nil)
     }
 
-    private func enforceMaximizeOnlyWindows() {
+    private func enforceWindowedMainWindow() {
         for window in NSApplication.shared.windows {
-            window.collectionBehavior = [.fullScreenAuxiliary]
+            if window.identifier == .pomodoroMainWindow {
+                window.applyPomodoroWindowChrome()
+            }
         }
     }
 }

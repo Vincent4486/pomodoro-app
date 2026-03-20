@@ -39,20 +39,36 @@ final class AIService {
     typealias TaskBreakdownResponse = AIPlanningResponse
     typealias TaskPlanningResponse = AIPlanningResponse
 
+    struct TaskDescriptionResponse: Decodable {
+        let description: String
+    }
+
     struct FreeSlot: Codable, Equatable {
         let start: Date
         let end: Date
     }
 
     struct AIScheduleResponse: Codable {
+        struct Metadata: Codable {
+            let generationPath: String
+            let reliability: Double
+        }
+
         let success: Bool
         let schedule: [ScheduleBlock]
         let freeSlots: [FreeSlot]
+        let metadata: Metadata?
 
-        init(success: Bool, schedule: [ScheduleBlock], freeSlots: [FreeSlot] = []) {
+        init(
+            success: Bool,
+            schedule: [ScheduleBlock],
+            freeSlots: [FreeSlot] = [],
+            metadata: Metadata? = nil
+        ) {
             self.success = success
             self.schedule = schedule
             self.freeSlots = freeSlots
+            self.metadata = metadata
         }
 
         init(from decoder: Decoder) throws {
@@ -60,6 +76,7 @@ final class AIService {
             success = try container.decodeIfPresent(Bool.self, forKey: .success) ?? true
             schedule = try container.decodeIfPresent([ScheduleBlock].self, forKey: .schedule) ?? []
             freeSlots = try container.decodeIfPresent([FreeSlot].self, forKey: .freeSlots) ?? []
+            metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata)
         }
     }
 
@@ -238,6 +255,19 @@ final class AIService {
         return try decodeAIPlanningResponse(from: result.data)
     }
 
+    func generateTaskDescription(title: String, notes: String?) async throws -> TaskDescriptionResponse {
+        let callable = functions.httpsCallable("generateTaskDescription")
+        let payload: [String: Any] = [
+            "title": title,
+            "notes": notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        ]
+
+        print("[AIService] Calling callable generateTaskDescription in us-central1 for title: \(title)")
+        let result = try await callable.call(payload)
+        print("[AIService] generateTaskDescription response received")
+        return try decodeTaskDescriptionResponse(from: result.data)
+    }
+
     func calendarReschedule(
         tasks: [TodoItem],
         events: [EKEvent],
@@ -362,6 +392,23 @@ final class AIService {
             return envelope.data
         }
         return try decoder.decode(AIScheduleResponse.self, from: responseData)
+    }
+
+    private func decodeTaskDescriptionResponse(from data: Any) throws -> TaskDescriptionResponse {
+        let rawObject: Any
+        if let dictionary = data as? [String: Any],
+           let nested = dictionary["data"] {
+            rawObject = nested
+        } else {
+            rawObject = data
+        }
+
+        guard JSONSerialization.isValidJSONObject(rawObject) else {
+            throw AIServiceError.invalidResponse
+        }
+
+        let responseData = try JSONSerialization.data(withJSONObject: rawObject)
+        return try JSONDecoder().decode(TaskDescriptionResponse.self, from: responseData)
     }
 
     private struct CalendarScheduleEnvelope: Decodable {

@@ -11,6 +11,7 @@
 		1C500AF364889EDC9C8772BC /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB46B7CF8A7C0F510CF4 /* AuthManager.swift */; };
 		1C500AF464889EDC9C8772BC /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB47B7CF8A7C0F510CF4 /* AuthViewModel.swift */; };
 		1C500AF564889EDC9C8772BC /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB48B7CF8A7C0F510CF4 /* AIService.swift */; };
+		2F0C10012BCD000000000001 /* FlowWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0C10002BCD000000000001 /* FlowWindowManager.swift */; };
 		4BDE965F88F5BUILDCBB5DF2 /* CalendarDayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDE965F88F54754BCBB5DF2 /* CalendarDayView.swift */; };
 		4DD2B11CF188B287CE18674F /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D95945228BEC2D75F362FF53 /* APIClient.swift */; };
 		7C217B312F3F89DD0076D4DA /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7C217B302F3F89DD0076D4DA /* GoogleService-Info.plist */; };
@@ -102,6 +103,7 @@
 		05F639B95E5345199E439834 /* LocalMediaPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMediaPlayer.swift; sourceTree = "<group>"; };
 		0D409152AD794BA998253C35 /* DailyStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyStats.swift; sourceTree = "<group>"; };
 		27A07A256CDE64E28DB5028F /* FeatureGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureGate.swift; sourceTree = "<group>"; };
+		2F0C10002BCD000000000001 /* FlowWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowWindowManager.swift; sourceTree = "<group>"; };
 		36B4A1D0B6904D3B9A1E8353 /* VisualEffectBlur.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectBlur.swift; sourceTree = "<group>"; };
 		379E0B0F492E771413BBB197 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
 		49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowBackgroundConfigurator.swift; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 				E2A1B0401A2B3C4D5E6F7001 /* LanguageManager.swift */,
 				7C360D542F191F17007313D3 /* MainWindowView.swift */,
 				F0F0F0F02FFF000000000001 /* FlowModeView.swift */,
+				2F0C10002BCD000000000001 /* FlowWindowManager.swift */,
 				ABFA2AD704BE4758B0A786D8 /* MediaControlBar.swift */,
 				7C360D982F191F17007313D3 /* MusicPanelView.swift */,
 				36B4A1D0B6904D3B9A1E8353 /* VisualEffectBlur.swift */,
@@ -480,6 +483,7 @@
 				AB9F279C180740EE9216C649 /* MediaControlBar.swift in Sources */,
 				7C360D5B2F191F17007313D3 /* MainWindowView.swift in Sources */,
 				F0F0F0F12FFF000000000001 /* FlowModeView.swift in Sources */,
+				2F0C10012BCD000000000001 /* FlowWindowManager.swift in Sources */,
 				7C360D922F191F17007313D3 /* MusicPanelView.swift in Sources */,
 				7C360D5C2F191F17007313D3 /* PomodoroApp.swift in Sources */,
 				7C360D6B2F191F17007313D3 /* AppDelegate.swift in Sources */,

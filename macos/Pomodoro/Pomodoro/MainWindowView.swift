@@ -19,7 +19,10 @@ struct MainWindowView: View {
     @EnvironmentObject private var audioSourceStore: AudioSourceStore
     @EnvironmentObject private var languageManager: LanguageManager
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @EnvironmentObject private var flowWindowManager: FlowWindowManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var featureGate = FeatureGate.shared
+    @ObservedObject private var subscriptionStore = SubscriptionStore.shared
     @State private var workMinutesText = ""
     @State private var shortBreakMinutesText = ""
     @State private var longBreakMinutesText = ""
@@ -43,7 +46,7 @@ struct MainWindowView: View {
     @State private var ambientSliderHover = false
     @State private var systemSliderHover = false
     @State private var isCheckingPlans = false
-    @State private var showPlansPaywall = false
+    @State private var plansPaywallContext: SubscriptionPaywallContext?
     @State private var plansErrorMessage: String?
     @State private var showPlansModePicker = false
     @State private var availablePlanModes: [YourPlansMode] = []
@@ -91,12 +94,13 @@ struct MainWindowView: View {
                 syncDurationTexts()
                 syncLongBreakInterval()
             }
-            .onChange(of: sidebarSelection) { _, newValue in
-                if newValue != .flow {
-                    lastNonFlowSelection = newValue
-                    appState.isInFlowMode = false
+            .onChange(of: sidebarSelection) { oldValue, newValue in
+                if newValue == .flow {
+                    if oldValue != .flow {
+                        lastNonFlowSelection = oldValue
+                    }
                 } else {
-                    appState.isInFlowMode = true
+                    lastNonFlowSelection = newValue
                 }
             }
             .onChange(of: focusedField) { _, newValue in
@@ -152,9 +156,15 @@ struct MainWindowView: View {
                 .allowsHitTesting(false)
             }
         }
-        .background(WindowBackgroundConfigurator())
-        .sheet(isPresented: $showPlansPaywall) {
-            yourPlansPaywallSheet
+        .background(WindowBackgroundConfigurator(onResolveWindow: { window in
+            flowWindowManager.registerMainWindow(window)
+        }))
+        .sheet(item: $plansPaywallContext) { context in
+            SubscriptionUpgradeSheetView(
+                context: context,
+                featureGate: featureGate,
+                subscriptionStore: subscriptionStore
+            )
         }
         .alert("Your Plans", isPresented: Binding(
             get: { plansErrorMessage != nil },
@@ -355,11 +365,15 @@ struct MainWindowView: View {
     }
 
     private var flowModeView: some View {
-        FlowModeView(exitAction: {
-            withAnimation {
-                sidebarSelection = lastNonFlowSelection
+        FlowModeView(
+            showsBackgroundLayer: true,
+            isFullscreenPresentation: false,
+            exitAction: {
+                withAnimation {
+                    sidebarSelection = lastNonFlowSelection
+                }
             }
-        })
+        )
     }
 
     private var countdownView: some View {
@@ -1491,38 +1505,6 @@ struct MainWindowView: View {
         }
     }
 
-    private var yourPlansPaywallSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Your Plans requires Plus")
-                .font(.title3.weight(.semibold))
-
-            Text("Upgrade to Plus or Pro to start Pomodoro sessions from your planned tasks.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button("Cancel") {
-                    showPlansPaywall = false
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("Upgrade") {
-                    openPricingPage()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(24)
-        .frame(width: 420)
-    }
-
-    private func openPricingPage() {
-        guard let url = URL(string: "https://pomodoro-app.tech") else { return }
-        NSWorkspace.shared.open(url)
-    }
-
     private func checkSubscription() async {
         isCheckingPlans = true
         defer { isCheckingPlans = false }
@@ -1538,7 +1520,11 @@ struct MainWindowView: View {
 
             let allowed = payload["allowed"] as? Bool ?? false
             if !allowed {
-                showPlansPaywall = true
+                plansPaywallContext = SubscriptionPaywallContext(
+                    requiredTier: .plus,
+                    title: "Your Plans requires Plus",
+                    message: "Upgrade to Plus or Pro to start Pomodoro sessions from your planned tasks."
+                )
                 return
             }
 

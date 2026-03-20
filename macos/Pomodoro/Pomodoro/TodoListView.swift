@@ -37,18 +37,42 @@ struct TodoListView: View {
     @State private var showTaskHint = false
     @State private var aiEstimatedHours = 1
     @State private var isGeneratingAIPlan = false
+    @State private var isGeneratingAIDescription = false
     @State private var aiPlanErrorMessage: String?
+    @State private var aiDescriptionErrorMessage: String?
+    @State private var pendingGeneratedDescription: String?
+    @State private var showReplaceDescriptionConfirmation = false
     @State private var showAILoginSheet = false
-    @State private var showAIUpgradeModal = false
-    @State private var aiUpgradeTitleOverride: String?
-    @State private var aiUpgradeBodyOverride: String?
+    @State private var upgradePaywallContext: SubscriptionPaywallContext?
     @State private var showAIAssistant = false
     @State private var isRunningAIAssistant = false
     @State private var aiAssistantErrorMessage: String?
     @State private var animatingCompletionIDs: Set<UUID> = []
     @State private var bouncingCompletionIDs: Set<UUID> = []
+    @State private var animatingSubtaskCompletionIDs: Set<UUID> = []
+    @State private var bouncingSubtaskCompletionIDs: Set<UUID> = []
     
     private static let taskHintDefaultsKey = "com.pomodoro.taskHintShown"
+    private var taskExpansionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .spring(response: 0.34, dampingFraction: 0.82)
+    }
+
+    private var completionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .spring(response: 0.28, dampingFraction: 0.68)
+    }
+
+    private var subtaskExpansionTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.98, anchor: .top)),
+                removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+            )
+    }
     
     private enum Segment: String, CaseIterable, Identifiable {
         case active
@@ -153,8 +177,17 @@ struct TodoListView: View {
                 }
 
                 Button {
-                    aiAssistantErrorMessage = nil
-                    showAIAssistant = true
+                    if !featureGate.canUseCloudProxyAI {
+                        presentLockedFeatureInfo(
+                            featureName: localizationManager.text("tasks.ai_assistant.button"),
+                            description: localizationManager.text("feature_gate.paywall.ai_assistant.description"),
+                            requiredTier: .plus,
+                            requirementText: localizationManager.text("feature_gate.paywall.requires_plus_or_pro")
+                        )
+                    } else {
+                        aiAssistantErrorMessage = nil
+                        showAIAssistant = true
+                    }
                 } label: {
                     Label(localizationManager.text("tasks.ai_assistant.button"), systemImage: "sparkles")
                 }
@@ -171,9 +204,11 @@ struct TodoListView: View {
                 .onChange(of: taskViewMode) { _, newMode in
                     guard newMode == .matrix, !featureGate.canUseEisenhowerMatrix else { return }
                     taskViewMode = .list
-                    aiUpgradeTitleOverride = localizationManager.text("tasks.matrix.requires_pro")
-                    aiUpgradeBodyOverride = localizationManager.text("tasks.matrix.requires_pro_body")
-                    showAIUpgradeModal = true
+                    presentLockedFeatureInfo(
+                        featureName: "Eisenhower Matrix",
+                        description: "Organize tasks by urgency and importance in a matrix view.",
+                        requiredTier: .pro
+                    )
                 }
                 
                 Picker("", selection: $selectedSegment) {
@@ -258,8 +293,12 @@ struct TodoListView: View {
             LoginSheetView()
                 .environmentObject(authViewModel)
         }
-        .sheet(isPresented: $showAIUpgradeModal) {
-            aiUpgradeSheet
+        .sheet(item: $upgradePaywallContext) { context in
+            SubscriptionUpgradeSheetView(
+                context: context,
+                featureGate: featureGate,
+                subscriptionStore: SubscriptionStore.shared
+            )
         }
         .sheet(isPresented: $showAIAssistant) {
             AIAssistantView(
@@ -272,11 +311,15 @@ struct TodoListView: View {
                 },
                 onClose: { showAIAssistant = false },
                 onLockedActionTap: { action in
-                    aiUpgradeTitleOverride = action == .planning
-                        ? localizationManager.text("tasks.ai_assistant.planning_requires_plus")
-                        : localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
-                    aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
-                    showAIUpgradeModal = true
+                    presentUpgradePaywall(
+                        requiredTier: .plus,
+                        title: action == .planning
+                            ? localizationManager.text("feature_gate.paywall.smart_planning.title")
+                            : localizationManager.text("feature_gate.paywall.ai_assistant.title"),
+                        message: action == .planning
+                            ? localizationManager.text("feature_gate.paywall.smart_planning.body")
+                            : localizationManager.text("feature_gate.paywall.ai_assistant.breakdown_body")
+                    )
                 },
                 onRunAction: { action, tasks, dueDate, estimatedHours in
                     await handleAIAssistantAction(
@@ -459,6 +502,7 @@ struct TodoListView: View {
                         .font(.caption.weight(.semibold))
                         .frame(width: 14)
                         .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded && !reduceMotion ? 0 : 0))
                 }
                 .buttonStyle(.plain)
 
@@ -616,6 +660,7 @@ struct TodoListView: View {
 
             if isExpanded {
                 subtaskSection(for: item)
+                    .transition(subtaskExpansionTransition)
             }
         }
         .padding(12)
@@ -624,6 +669,7 @@ struct TodoListView: View {
         .scaleEffect(reduceMotion ? 1.0 : (showsCompletedState ? 0.98 : 1.0))
         .opacity(showsCompletedState ? 0.6 : (selectedSegment == .completed ? 0.9 : 1.0))
         .animation(.easeInOut(duration: 0.25), value: showsCompletedState)
+        .animation(taskExpansionAnimation, value: isExpanded)
         .contentShape(Rectangle())
         .onTapGesture {
             handleTaskSelection(item)
@@ -665,28 +711,8 @@ struct TodoListView: View {
 
             if !item.subtasks.isEmpty {
                 ForEach(item.subtasks) { subtask in
-                    HStack(spacing: 8) {
-                        Button {
-                            guard featureGate.canUseSubtasks else {
-                                aiUpgradeTitleOverride = localizationManager.text("tasks.subtasks.requires_plus")
-                                aiUpgradeBodyOverride = localizationManager.text("tasks.subtasks.requires_plus_body")
-                                showAIUpgradeModal = true
-                                return
-                            }
-                            todoStore.toggleSubtask(taskID: item.id, subtaskID: subtask.id)
-                        } label: {
-                            Image(systemName: subtask.completed ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(subtask.completed ? .green : .secondary)
-                        }
-                        .buttonStyle(.plain)
-
-                        Text(subtask.title)
-                            .font(.subheadline)
-                            .strikethrough(subtask.completed)
-                            .foregroundStyle(subtask.completed ? .secondary : .primary)
-
-                        Spacer()
-                    }
+                    subtaskRow(itemID: item.id, subtask: subtask)
+                        .transition(subtaskExpansionTransition)
                 }
             }
 
@@ -711,24 +737,68 @@ struct TodoListView: View {
                 }
             } else {
                 Button {
-                    aiUpgradeTitleOverride = localizationManager.text("tasks.subtasks.requires_plus")
-                    aiUpgradeBodyOverride = localizationManager.text("tasks.subtasks.requires_plus_body")
-                    showAIUpgradeModal = true
+                    presentLockedFeatureInfo(
+                        featureName: "Subtasks",
+                        description: "Break a task into smaller checklist items and track progress.",
+                        requiredTier: .plus
+                    )
                 } label: {
-                    Label(localizationManager.text("tasks.subtasks.unlock"), systemImage: "lock.fill")
+                    Label("Subtasks", systemImage: "lock.fill")
                 }
                 .buttonStyle(.bordered)
             }
         }
         .padding(.leading, 34)
+        .clipped()
     }
 
     private func toggleExpanded(_ id: UUID) {
-        if expandedTaskIDs.contains(id) {
-            expandedTaskIDs.remove(id)
-        } else {
-            expandedTaskIDs.insert(id)
+        withAnimation(taskExpansionAnimation) {
+            if expandedTaskIDs.contains(id) {
+                expandedTaskIDs.remove(id)
+            } else {
+                expandedTaskIDs.insert(id)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func subtaskRow(itemID: UUID, subtask: TodoSubtask) -> some View {
+        let isAnimatingCompletion = animatingSubtaskCompletionIDs.contains(subtask.id)
+        let showsCompletedState = subtask.completed || isAnimatingCompletion
+
+        HStack(spacing: 8) {
+            Button {
+                guard featureGate.canUseSubtasks else {
+                    presentLockedFeatureInfo(
+                        featureName: "Subtasks",
+                        description: "Break a task into smaller checklist items and track progress.",
+                        requiredTier: .plus
+                    )
+                    return
+                }
+                handleSubtaskCompletionTap(taskID: itemID, subtask: subtask)
+            } label: {
+                Image(systemName: showsCompletedState ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(showsCompletedState ? .green : .secondary)
+                    .scaleEffect(bouncingSubtaskCompletionIDs.contains(subtask.id) ? 1.08 : 1.0)
+                    .animation(completionAnimation, value: bouncingSubtaskCompletionIDs.contains(subtask.id))
+                    .animation(.easeInOut(duration: 0.18), value: showsCompletedState)
+            }
+            .buttonStyle(.plain)
+
+            Text(subtask.title)
+                .font(.subheadline)
+                .strikethrough(showsCompletedState)
+                .foregroundStyle(showsCompletedState ? .secondary : .primary)
+                .scaleEffect(reduceMotion ? 1.0 : (showsCompletedState ? 0.99 : 1.0))
+                .opacity(showsCompletedState ? 0.72 : 1.0)
+                .animation(.easeInOut(duration: 0.22), value: showsCompletedState)
+
+            Spacer()
+        }
+        .offset(y: reduceMotion ? 0 : (showsCompletedState ? -1 : 0))
+        .animation(.easeInOut(duration: 0.22), value: showsCompletedState)
     }
 
     private var keyboardFocusedTask: TodoItem? {
@@ -772,6 +842,29 @@ struct TodoListView: View {
             todoStore.toggleCompletion(item)
             animatingCompletionIDs.remove(item.id)
             syncUpdatedReminderIfNeeded(for: item.id)
+        }
+    }
+
+    private func handleSubtaskCompletionTap(taskID: UUID, subtask: TodoSubtask) {
+        if subtask.completed {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                todoStore.toggleSubtask(taskID: taskID, subtaskID: subtask.id)
+            }
+            return
+        }
+
+        _ = withAnimation(completionAnimation) {
+            bouncingSubtaskCompletionIDs.insert(subtask.id)
+        }
+        _ = withAnimation(.easeInOut(duration: 0.22)) {
+            animatingSubtaskCompletionIDs.insert(subtask.id)
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            bouncingSubtaskCompletionIDs.remove(subtask.id)
+            todoStore.toggleSubtask(taskID: taskID, subtaskID: subtask.id)
+            animatingSubtaskCompletionIDs.remove(subtask.id)
         }
     }
 
@@ -1030,18 +1123,44 @@ struct TodoListView: View {
                 }
                 
                 if featureGate.canUseTaskMarkdown {
-                    Text(localizationManager.text("tasks.editor.description_markdown"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    HStack(alignment: .center, spacing: 10) {
+                        Text(localizationManager.text("tasks.editor.description_markdown"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Button(action: handleGenerateDescriptionTapped) {
+                            if isGeneratingAIDescription {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text(localizationManager.text("tasks.ai_description.loading"))
+                                }
+                            } else {
+                                Label(localizationManager.text("tasks.ai_description.button"), systemImage: "sparkles")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isGeneratingAIDescription || titleField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+
                     TextField(localizationManager.text("tasks.editor.notes_placeholder"), text: $descriptionField, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
+                    if let aiDescriptionErrorMessage, !aiDescriptionErrorMessage.isEmpty {
+                        Text(aiDescriptionErrorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
                 } else {
                     Button {
-                        aiUpgradeTitleOverride = localizationManager.text("tasks.markdown.requires_plus")
-                        aiUpgradeBodyOverride = localizationManager.text("tasks.markdown.requires_plus_body")
-                        showAIUpgradeModal = true
+                        presentLockedFeatureInfo(
+                            featureName: "Markdown Descriptions",
+                            description: "Format task notes with headings, lists, and richer structure.",
+                            requiredTier: .plus
+                        )
                     } label: {
-                        Label(localizationManager.text("tasks.markdown.unlock"), systemImage: "lock.fill")
+                        Label("Markdown Descriptions", systemImage: "lock.fill")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -1101,37 +1220,25 @@ struct TodoListView: View {
         }
         .padding(24)
         .frame(width: 420)
-    }
-
-    private var aiUpgradeSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(aiUpgradeTitleOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_title"))
-                .font(.title3.weight(.semibold))
-
-            Text(aiUpgradeBodyOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_body"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button(localizationManager.text("common.cancel")) {
-                    aiUpgradeTitleOverride = nil
-                    aiUpgradeBodyOverride = nil
-                    showAIUpgradeModal = false
+        .confirmationDialog(
+            localizationManager.text("tasks.ai_description.replace_title"),
+            isPresented: $showReplaceDescriptionConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(localizationManager.text("tasks.ai_description.replace_action")) {
+                if let pendingGeneratedDescription {
+                    descriptionField = pendingGeneratedDescription
                 }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button(localizationManager.text("tasks.ai_assistant.upgrade")) {
-                    openPricingPage()
-                }
-                .buttonStyle(.borderedProminent)
+                pendingGeneratedDescription = nil
             }
+            Button(localizationManager.text("common.cancel"), role: .cancel) {
+                pendingGeneratedDescription = nil
+            }
+        } message: {
+            Text(localizationManager.text("tasks.ai_description.replace_message"))
         }
-        .padding(24)
-        .frame(width: 420)
     }
-    
+
     private func openEditorForNew() {
         editingItem = nil
         titleField = ""
@@ -1145,7 +1252,10 @@ struct TodoListView: View {
         pomodoroEstimateField = 1
         aiEstimatedHours = 1
         aiPlanErrorMessage = nil
+        aiDescriptionErrorMessage = nil
         isGeneratingAIPlan = false
+        isGeneratingAIDescription = false
+        pendingGeneratedDescription = nil
         showingEditor = true
     }
     
@@ -1168,7 +1278,10 @@ struct TodoListView: View {
         pomodoroEstimateField = item.pomodoroEstimate ?? 1
         aiEstimatedHours = max(1, ((item.durationMinutes ?? 25) + 59) / 60)
         aiPlanErrorMessage = nil
+        aiDescriptionErrorMessage = nil
         isGeneratingAIPlan = false
+        isGeneratingAIDescription = false
+        pendingGeneratedDescription = nil
         showingEditor = true
     }
     
@@ -1185,7 +1298,10 @@ struct TodoListView: View {
         pomodoroEstimateField = 1
         aiEstimatedHours = 1
         aiPlanErrorMessage = nil
+        aiDescriptionErrorMessage = nil
         isGeneratingAIPlan = false
+        isGeneratingAIDescription = false
+        pendingGeneratedDescription = nil
     }
     
     private func saveTask() {
@@ -1268,6 +1384,41 @@ struct TodoListView: View {
         }
     }
 
+    private func generateTaskDescription() async {
+        aiDescriptionErrorMessage = nil
+
+        let trimmedTitle = titleField.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            aiDescriptionErrorMessage = localizationManager.text("tasks.ai_description.requires_title")
+            return
+        }
+
+        isGeneratingAIDescription = true
+        defer { isGeneratingAIDescription = false }
+
+        do {
+            let response = try await AIService.shared.generateTaskDescription(
+                title: trimmedTitle,
+                notes: descriptionField.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            let generatedDescription = response.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !generatedDescription.isEmpty else {
+                aiDescriptionErrorMessage = localizationManager.text("tasks.ai_description.error")
+                return
+            }
+
+            let hasExistingDescription = !descriptionField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if hasExistingDescription {
+                pendingGeneratedDescription = generatedDescription
+                showReplaceDescriptionConfirmation = true
+            } else {
+                descriptionField = generatedDescription
+            }
+        } catch {
+            aiDescriptionErrorMessage = localizationManager.text("tasks.ai_description.error")
+        }
+    }
+
     private func handleAIPlanButtonTapped() {
         aiPlanErrorMessage = nil
 
@@ -1277,9 +1428,12 @@ struct TodoListView: View {
         }
 
         if !featureGate.canUseAIAssistantBreakdown {
-            aiUpgradeTitleOverride = localizationManager.text("tasks.ai_assistant.plus_feature_title")
-            aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
-            showAIUpgradeModal = true
+            presentLockedFeatureInfo(
+                featureName: localizationManager.text("feature_gate.paywall.ai_assistant.title"),
+                description: localizationManager.text("feature_gate.paywall.ai_assistant.description"),
+                requiredTier: .plus,
+                requirementText: localizationManager.text("feature_gate.paywall.requires_plus_or_pro")
+            )
             return
         }
 
@@ -1298,6 +1452,39 @@ struct TodoListView: View {
         }
     }
 
+    private func handleGenerateDescriptionTapped() {
+        aiDescriptionErrorMessage = nil
+
+        guard authViewModel.isAuthenticated else {
+            showAILoginSheet = true
+            return
+        }
+
+        guard featureGate.canUseAIAssistantBreakdown else {
+            presentLockedFeatureInfo(
+                featureName: localizationManager.text("tasks.ai_assistant.button"),
+                description: localizationManager.text("feature_gate.paywall.ai_assistant.description"),
+                requiredTier: .plus,
+                requirementText: localizationManager.text("feature_gate.paywall.requires_plus_or_pro")
+            )
+            return
+        }
+
+        if let quotaMessage = featureGate.aiPlanningQuotaMessage {
+            aiDescriptionErrorMessage = quotaMessage
+            return
+        }
+
+        guard featureGate.canRunAIPlanningRequest else {
+            aiDescriptionErrorMessage = localizationManager.text("tasks.ai_description.error")
+            return
+        }
+
+        Task { @MainActor in
+            await generateTaskDescription()
+        }
+    }
+
     private func handleAIAssistantAction(
         _ action: AIAssistantAction,
         selectedTasks: [TodoItem],
@@ -1313,11 +1500,26 @@ struct TodoListView: View {
         }
 
         if featureGate.shouldShowUpgradeModal(for: action) {
-            aiUpgradeTitleOverride = action == .planning
-                ? localizationManager.text("tasks.ai_assistant.planning_requires_plus")
-                : localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
-            aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
-            showAIUpgradeModal = true
+            switch action {
+            case .breakdown:
+                presentLockedFeatureInfo(
+                    featureName: localizationManager.text("feature_gate.paywall.ai_assistant.title"),
+                    description: localizationManager.text("feature_gate.paywall.ai_assistant.breakdown_description"),
+                    requiredTier: .plus
+                )
+            case .planning:
+                presentLockedFeatureInfo(
+                    featureName: localizationManager.text("feature_gate.paywall.smart_planning.title"),
+                    description: localizationManager.text("feature_gate.paywall.smart_planning.description"),
+                    requiredTier: .plus
+                )
+            case .reschedule:
+                presentLockedFeatureInfo(
+                    featureName: localizationManager.text("feature_gate.paywall.smart_rescheduling.title"),
+                    description: localizationManager.text("feature_gate.paywall.smart_rescheduling.description"),
+                    requiredTier: .pro
+                )
+            }
             return
         }
 
@@ -1397,11 +1599,37 @@ struct TodoListView: View {
         Array(Set(tasks.flatMap(\.tags))).sorted()
     }
 
-    private func openPricingPage() {
-        guard let url = URL(string: "https://pomodoro-app.tech") else {
-            return
+    private func presentUpgradePaywall(requiredTier: PlanTier, title: String, message: String) {
+        upgradePaywallContext = SubscriptionPaywallContext(
+            requiredTier: requiredTier,
+            title: title,
+            message: message
+        )
+    }
+
+    private func presentLockedFeatureInfo(
+        featureName: String,
+        description: String,
+        requiredTier: PlanTier,
+        requirementText: String? = nil
+    ) {
+        let requiredMessage = requirementText ?? localizedRequirementText(for: requiredTier)
+        presentUpgradePaywall(
+            requiredTier: requiredTier,
+            title: featureName,
+            message: "\(description)\n\n\(requiredMessage)"
+        )
+    }
+
+    private func localizedRequirementText(for requiredTier: PlanTier) -> String {
+        switch requiredTier {
+        case .free:
+            return ""
+        case .plus:
+            return localizationManager.text("feature_gate.paywall.requires_plus")
+        case .pro:
+            return localizationManager.text("feature_gate.paywall.requires_pro")
         }
-        NSWorkspace.shared.open(url)
     }
 
     private func applyAIPlan(

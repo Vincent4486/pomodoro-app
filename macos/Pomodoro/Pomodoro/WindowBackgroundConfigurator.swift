@@ -16,7 +16,15 @@ import SwiftUI
 /// - Keeps the header invisible so the content can bleed into the titlebar
 /// - Preserves window dragging by allowing the full background to act as a drag region
 struct WindowBackgroundConfigurator: NSViewRepresentable {
+    let onResolveWindow: ((NSWindow) -> Void)?
+
+    init(onResolveWindow: ((NSWindow) -> Void)? = nil) {
+        self.onResolveWindow = onResolveWindow
+    }
+
     final class HostingView: NSView {
+        var onResolveWindow: ((NSWindow) -> Void)?
+
         override func hitTest(_ point: NSPoint) -> NSView? {
             nil
         }
@@ -30,14 +38,20 @@ struct WindowBackgroundConfigurator: NSViewRepresentable {
             guard let window else { return }
             window.identifier = .pomodoroMainWindow
             window.applyPomodoroWindowChrome()
+            onResolveWindow?(window)
         }
     }
 
     func makeNSView(context: Context) -> HostingView {
-        HostingView()
+        let view = HostingView()
+        view.onResolveWindow = onResolveWindow
+        return view
     }
 
-    func updateNSView(_ nsView: HostingView, context: Context) {}
+    func updateNSView(_ nsView: HostingView, context: Context) {
+        nsView.onResolveWindow = onResolveWindow
+        nsView.applyWindowStyling()
+    }
 }
 
 extension NSWindow {
@@ -65,9 +79,15 @@ extension NSWindow {
         styleMask.insert(.resizable)
         toolbarStyle = .unified
         isMovableByWindowBackground = true
+        collectionBehavior.remove(.fullScreenPrimary)
+        collectionBehavior.remove(.fullScreenAuxiliary)
+        collectionBehavior.remove(.fullScreenAllowsTiling)
+        standardWindowButton(.zoomButton)?.isHidden = false
+        standardWindowButton(.zoomButton)?.isEnabled = true
     }
 }
 
 extension NSUserInterfaceItemIdentifier {
     static let pomodoroMainWindow = NSUserInterfaceItemIdentifier("PomodoroMainWindow")
+    static let pomodoroFlowWindow = NSUserInterfaceItemIdentifier("PomodoroFlowWindow")
 }

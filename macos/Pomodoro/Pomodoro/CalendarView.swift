@@ -37,9 +37,7 @@ struct CalendarView: View {
     @State private var isRescheduling = false
     @State private var rescheduleError: String?
     @State private var showAILoginSheet = false
-    @State private var showAIUpgradeModal = false
-    @State private var aiUpgradeTitleOverride: String?
-    @State private var aiUpgradeBodyOverride: String?
+    @State private var upgradePaywallContext: SubscriptionPaywallContext?
 
     // MARK: - Reschedule state
     /// Snapshot of tasks/events as they existed before the last reschedule — used for Undo.
@@ -154,8 +152,12 @@ struct CalendarView: View {
             LoginSheetView()
                 .environmentObject(authViewModel)
         }
-        .sheet(isPresented: $showAIUpgradeModal) {
-            aiUpgradeSheet
+        .sheet(item: $upgradePaywallContext) { context in
+            SubscriptionUpgradeSheetView(
+                context: context,
+                featureGate: featureGate,
+                subscriptionStore: SubscriptionStore.shared
+            )
         }
         .sheet(isPresented: $showAIAssistant) {
             AIAssistantView(
@@ -172,13 +174,17 @@ struct CalendarView: View {
                     case .reschedule:
                         presentAISchedulingUpgradePrompt()
                     case .planning:
-                        aiUpgradeTitleOverride = localizationManager.text("tasks.ai_assistant.planning_requires_plus")
-                        aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
-                        showAIUpgradeModal = true
+                        presentLockedFeatureInfo(
+                            featureName: localizationManager.text("feature_gate.paywall.smart_planning.title"),
+                            description: localizationManager.text("feature_gate.paywall.smart_planning.description"),
+                            requiredTier: .plus
+                        )
                     case .breakdown:
-                        aiUpgradeTitleOverride = localizationManager.text("tasks.ai_assistant.breakdown_requires_plus")
-                        aiUpgradeBodyOverride = localizationManager.text("tasks.ai_assistant.plus_feature_body")
-                        showAIUpgradeModal = true
+                        presentLockedFeatureInfo(
+                            featureName: localizationManager.text("feature_gate.paywall.ai_assistant.title"),
+                            description: localizationManager.text("feature_gate.paywall.ai_assistant.breakdown_description"),
+                            requiredTier: .plus
+                        )
                     }
                 },
                 onRunAction: { action, tasks, dueDate, estimatedHours in
@@ -241,8 +247,17 @@ struct CalendarView: View {
                         .buttonStyle(.borderedProminent)
 
                         Button {
-                            aiAssistantErrorMessage = nil
-                            showAIAssistant = true
+                            if !featureGate.canUseCloudProxyAI {
+                                presentLockedFeatureInfo(
+                                    featureName: localizationManager.text("tasks.ai_assistant.button"),
+                                    description: localizationManager.text("feature_gate.paywall.ai_assistant.description"),
+                                    requiredTier: .plus,
+                                    requirementText: localizationManager.text("feature_gate.paywall.requires_plus_or_pro")
+                                )
+                            } else {
+                                aiAssistantErrorMessage = nil
+                                showAIAssistant = true
+                            }
                         } label: {
                             Label(localizationManager.text("tasks.ai_assistant.button"), systemImage: "sparkles")
                         }
@@ -334,35 +349,6 @@ struct CalendarView: View {
         }
     }
 
-    private var aiUpgradeSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(aiUpgradeTitleOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_title"))
-                .font(.title3.weight(.semibold))
-
-            Text(aiUpgradeBodyOverride ?? localizationManager.text("tasks.ai_assistant.plus_feature_body"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button(localizationManager.text("common.cancel")) {
-                    aiUpgradeTitleOverride = nil
-                    aiUpgradeBodyOverride = nil
-                    showAIUpgradeModal = false
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button(localizationManager.text("tasks.ai_assistant.upgrade")) {
-                    openPricingPage()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(24)
-        .frame(width: 420)
-    }
-    
     @ViewBuilder
     private func rescheduleToastView(_ toast: RescheduleToast) -> some View {
         HStack(spacing: 12) {
@@ -667,15 +653,45 @@ struct CalendarView: View {
         }
     }
 
-    private func openPricingPage() {
-        guard let url = URL(string: "https://pomodoro-app.tech") else { return }
-        NSWorkspace.shared.open(url)
+    private func presentUpgradePaywall(requiredTier: PlanTier, title: String, message: String) {
+        upgradePaywallContext = SubscriptionPaywallContext(
+            requiredTier: requiredTier,
+            title: title,
+            message: message
+        )
+    }
+
+    private func presentLockedFeatureInfo(
+        featureName: String,
+        description: String,
+        requiredTier: PlanTier,
+        requirementText: String? = nil
+    ) {
+        let requiredMessage = requirementText ?? localizedRequirementText(for: requiredTier)
+        presentUpgradePaywall(
+            requiredTier: requiredTier,
+            title: featureName,
+            message: "\(description)\n\n\(requiredMessage)"
+        )
+    }
+
+    private func localizedRequirementText(for requiredTier: PlanTier) -> String {
+        switch requiredTier {
+        case .free:
+            return ""
+        case .plus:
+            return localizationManager.text("feature_gate.paywall.requires_plus")
+        case .pro:
+            return localizationManager.text("feature_gate.paywall.requires_pro")
+        }
     }
 
     private func presentAISchedulingUpgradePrompt() {
-        aiUpgradeTitleOverride = localizationManager.text("calendar.ai_auto_schedule.requires_pro_title")
-        aiUpgradeBodyOverride = localizationManager.text("calendar.ai_auto_schedule.requires_pro")
-        showAIUpgradeModal = true
+        presentLockedFeatureInfo(
+            featureName: localizationManager.text("feature_gate.paywall.smart_rescheduling.title"),
+            description: localizationManager.text("feature_gate.paywall.smart_rescheduling.description"),
+            requiredTier: .pro
+        )
     }
 
     private func performCalendarReschedule() async {

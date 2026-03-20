@@ -1,6 +1,9 @@
 import Foundation
+import Combine
+import CryptoKit
 import FirebaseAuth
 import FirebaseCore
+import StoreKit
 
 final class APIClient {
     enum APIError: LocalizedError {
@@ -270,5 +273,499 @@ final class AIProxyClient {
             return raw
         }
         return nil
+    }
+}
+
+struct SubscriptionEntitlement: Decodable {
+    let effectiveProductId: String?
+    let tier: String
+    let expires: String?
+    let nextProductId: String?
+    let nextTier: String?
+    let productId: String?
+    let status: String?
+}
+
+final class SubscriptionAPIClient {
+    enum SubscriptionAPIError: LocalizedError {
+        case invalidEndpoint
+        case invalidResponse
+        case network(Swift.Error)
+        case http(statusCode: Int, message: String?)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidEndpoint:
+                return LocalizationManager.shared.text("api.error.invalid_endpoint")
+            case .invalidResponse:
+                return LocalizationManager.shared.text("api.error.aiproxy_invalid_response")
+            case .network(let error):
+                return error.localizedDescription
+            case .http(_, let message):
+                return message ?? LocalizationManager.shared.text("api.error.aiproxy_invalid_response")
+            }
+        }
+    }
+
+    private struct VerifyRequest: Encodable {
+        let changeType: String?
+        let renewalInfo: String?
+        let transaction: String
+    }
+
+    private struct ErrorEnvelope: Decodable {
+        struct InnerError: Decodable {
+            let message: String?
+        }
+
+        let error: InnerError?
+        let message: String?
+    }
+
+    private let session: URLSession
+    private let region: String
+
+    init(
+        session: URLSession = .shared,
+        region: String? = nil
+    ) {
+        self.session = session
+        if let region {
+            self.region = region
+        } else if let configured = Bundle.main.infoDictionary?["POMODORO_CLOUD_FUNCTION_REGION"] as? String,
+                  !configured.isEmpty {
+            self.region = configured
+        } else {
+            self.region = "us-central1"
+        }
+    }
+
+    func verify(
+        transactionJWS: String,
+        renewalInfoJWS: String? = nil,
+        changeType: String? = nil
+    ) async throws -> SubscriptionEntitlement {
+        let token = try await AuthViewModel.shared.getValidIDToken()
+        let endpoint = try resolveEndpointURL()
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(
+            VerifyRequest(
+                changeType: changeType,
+                renewalInfo: renewalInfoJWS,
+                transaction: transactionJWS
+            )
+        )
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw SubscriptionAPIError.network(error)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SubscriptionAPIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200...299:
+            do {
+                return try JSONDecoder().decode(SubscriptionEntitlement.self, from: data)
+            } catch {
+                throw SubscriptionAPIError.invalidResponse
+            }
+        default:
+            throw SubscriptionAPIError.http(
+                statusCode: httpResponse.statusCode,
+                message: extractErrorMessage(from: data)
+            )
+        }
+    }
+
+    private func resolveEndpointURL() throws -> URL {
+        if let explicit = Bundle.main.infoDictionary?["POMODORO_SUBSCRIPTION_VERIFY_URL"] as? String,
+           let url = URL(string: explicit),
+           !explicit.isEmpty {
+            return url
+        }
+
+        guard let projectID = FirebaseApp.app()?.options.projectID,
+              !projectID.isEmpty,
+              let url = URL(string: "https://\(region)-\(projectID).cloudfunctions.net/subscriptionVerify") else {
+            throw SubscriptionAPIError.invalidEndpoint
+        }
+
+        return url
+    }
+
+    private func extractErrorMessage(from data: Data) -> String? {
+        if let decoded = try? JSONDecoder().decode(ErrorEnvelope.self, from: data) {
+            return decoded.error?.message ?? decoded.message
+        }
+        if let raw = String(data: data, encoding: .utf8),
+           !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return raw
+        }
+        return nil
+    }
+}
+
+@MainActor
+final class SubscriptionStore: ObservableObject {
+    enum SubscriptionChangeKind: String {
+        case newPurchase = "new_purchase"
+        case upgrade
+        case downgrade
+        case sameTierChange = "same_tier_change"
+        case noChange = "no_change"
+    }
+
+    private struct ActiveSubscriptionContext {
+        let transaction: Transaction
+        let renewalInfo: Product.SubscriptionInfo.RenewalInfo?
+        let renewalInfoJWS: String?
+        let productID: String
+        let tier: String
+        let expirationDate: Date?
+    }
+
+    static let shared = SubscriptionStore()
+
+    @Published private(set) var products: [Product] = []
+    @Published private(set) var isLoadingProducts = false
+    @Published private(set) var isRestoring = false
+    @Published private(set) var activePurchaseProductID: String?
+    @Published private(set) var lastEntitlement: SubscriptionEntitlement?
+    @Published var errorMessage: String?
+
+    private let productIDs = [
+        "pomodoro.pro.monthly",
+        "pomodoro.pro.yearly",
+        "pomodoro.plus.monthly",
+        "pomodoro.plus.yearly",
+    ]
+
+    private let apiClient: SubscriptionAPIClient
+    private var updatesTask: Task<Void, Never>?
+    private var hasStarted = false
+
+    private init(apiClient: SubscriptionAPIClient? = nil) {
+        self.apiClient = apiClient ?? SubscriptionAPIClient()
+    }
+
+    deinit {
+        updatesTask?.cancel()
+    }
+
+    func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
+
+        updatesTask = Task { [weak self] in
+            await self?.observeTransactionUpdates()
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.loadProducts()
+            await self.syncCurrentEntitlements()
+        }
+    }
+
+    func loadProducts() async {
+        isLoadingProducts = true
+        defer { isLoadingProducts = false }
+
+        do {
+            let loadedProducts = try await Product.products(for: productIDs)
+            products = loadedProducts.sorted { lhs, rhs in
+                let lhsRank = Self.productSortRank(for: lhs.id)
+                let rhsRank = Self.productSortRank(for: rhs.id)
+                if lhsRank == rhsRank {
+                    return lhs.displayPrice < rhs.displayPrice
+                }
+                return lhsRank < rhsRank
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func purchase(_ product: Product) async {
+        activePurchaseProductID = product.id
+        errorMessage = nil
+        defer { activePurchaseProductID = nil }
+
+        do {
+            _ = try await AuthViewModel.shared.prepareForPurchase()
+            let activeContext = try await activeSubscriptionContext(preferredProduct: product)
+            let changeKind = determineChangeKind(from: activeContext, to: product.id)
+            if changeKind == .noChange {
+                errorMessage = "This subscription is already active."
+                return
+            }
+
+            var purchaseOptions: Set<Product.PurchaseOption> = []
+            if let appAccountToken = appAccountToken() {
+                purchaseOptions.insert(.appAccountToken(appAccountToken))
+            }
+
+            let result = try await product.purchase(options: purchaseOptions)
+            switch result {
+            case .success(let verification):
+                let transaction = try verified(verification)
+                let updatedContext = try await activeSubscriptionContext(preferredProduct: product)
+                lastEntitlement = try await apiClient.verify(
+                    transactionJWS: verification.jwsRepresentation,
+                    renewalInfoJWS: updatedContext?.renewalInfoJWS,
+                    changeType: changeKind.rawValue
+                )
+                await FeatureGate.shared.refreshAllowance()
+                await transaction.finish()
+            case .pending:
+                break
+            case .userCancelled:
+                break
+            @unknown default:
+                break
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func restorePurchases() async {
+        isRestoring = true
+        errorMessage = nil
+        defer { isRestoring = false }
+
+        do {
+            try await AppStore.sync()
+            await syncCurrentEntitlements()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func syncCurrentEntitlements() async {
+        errorMessage = nil
+        var latestEntitlement: SubscriptionEntitlement?
+        let renewalInfoJWS: String?
+        do {
+            renewalInfoJWS = try await activeSubscriptionContext()?.renewalInfoJWS
+        } catch {
+            renewalInfoJWS = nil
+        }
+
+        do {
+            for await verification in Transaction.currentEntitlements {
+                _ = try verified(verification)
+                latestEntitlement = try await apiClient.verify(
+                    transactionJWS: verification.jwsRepresentation,
+                    renewalInfoJWS: renewalInfoJWS
+                )
+            }
+
+            lastEntitlement = latestEntitlement
+            await FeatureGate.shared.refreshAllowance()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func observeTransactionUpdates() async {
+        for await verification in Transaction.updates {
+            do {
+                let transaction = try await MainActor.run {
+                    try self.verified(verification)
+                }
+                let activeContext = try await self.activeSubscriptionContext()
+
+                let entitlement = try await apiClient.verify(
+                    transactionJWS: verification.jwsRepresentation,
+                    renewalInfoJWS: activeContext?.renewalInfoJWS
+                )
+                await MainActor.run {
+                    self.lastEntitlement = entitlement
+                }
+                await FeatureGate.shared.refreshAllowance()
+                await transaction.finish()
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func verified<T>(_ result: VerificationResult<T>) throws -> T {
+        switch result {
+        case .verified(let safe):
+            return safe
+        case .unverified(_, let error):
+            throw error
+        }
+    }
+
+    private func activeSubscriptionContext(preferredProduct: Product? = nil) async throws -> ActiveSubscriptionContext? {
+        if let preferredProduct,
+           let subscription = preferredProduct.subscription {
+            let statuses = try await subscription.status
+            if let context = try verifiedActiveSubscriptionContext(from: statuses) {
+                return context
+            }
+        }
+
+        var fallbackTransaction: Transaction?
+        for await verification in Transaction.currentEntitlements {
+            let transaction = try verified(verification)
+            if productIDs.contains(transaction.productID) {
+                fallbackTransaction = transaction
+                break
+            }
+        }
+
+        guard let fallbackTransaction,
+              let tier = subscriptionTier(for: fallbackTransaction.productID) else {
+            return nil
+        }
+
+        return ActiveSubscriptionContext(
+            transaction: fallbackTransaction,
+            renewalInfo: nil,
+            renewalInfoJWS: nil,
+            productID: fallbackTransaction.productID,
+            tier: tier,
+            expirationDate: fallbackTransaction.expirationDate
+        )
+    }
+
+    private func verifiedActiveSubscriptionContext(
+        from statuses: [Product.SubscriptionInfo.Status]
+    ) throws -> ActiveSubscriptionContext? {
+        let activeStates: Set<Product.SubscriptionInfo.RenewalState> = [
+            .subscribed,
+            .inGracePeriod,
+            .inBillingRetryPeriod,
+        ]
+
+        let sortedStatuses = statuses
+            .filter { activeStates.contains($0.state) }
+            .sorted {
+                let lhsExpiration = (try? verified($0.transaction).expirationDate) ?? .distantPast
+                let rhsExpiration = (try? verified($1.transaction).expirationDate) ?? .distantPast
+                return lhsExpiration > rhsExpiration
+            }
+
+        for status in sortedStatuses {
+            let transaction = try verified(status.transaction)
+            guard let tier = subscriptionTier(for: transaction.productID) else {
+                continue
+            }
+            let renewalInfo = try verified(status.renewalInfo)
+            return ActiveSubscriptionContext(
+                transaction: transaction,
+                renewalInfo: renewalInfo,
+                renewalInfoJWS: status.renewalInfo.jwsRepresentation,
+                productID: transaction.productID,
+                tier: tier,
+                expirationDate: transaction.expirationDate
+            )
+        }
+
+        return nil
+    }
+
+    private func determineChangeKind(
+        from activeContext: ActiveSubscriptionContext?,
+        to newProductID: String
+    ) -> SubscriptionChangeKind {
+        guard let newTier = subscriptionTier(for: newProductID) else {
+            return .newPurchase
+        }
+        guard let activeContext else {
+            return .newPurchase
+        }
+        if activeContext.productID == newProductID {
+            return .noChange
+        }
+        let currentRank = tierRank(for: activeContext.tier)
+        let newRank = tierRank(for: newTier)
+        if newRank > currentRank {
+            return .upgrade
+        }
+        if newRank < currentRank {
+            return .downgrade
+        }
+        return .sameTierChange
+    }
+
+    private func subscriptionTier(for productID: String) -> String? {
+        if productID.contains("pomodoro.pro.") {
+            return "pro"
+        }
+        if productID.contains("pomodoro.plus.") {
+            return "plus"
+        }
+        return nil
+    }
+
+    private func tierRank(for tier: String) -> Int {
+        switch tier {
+        case "plus":
+            return 1
+        case "pro":
+            return 2
+        default:
+            return 0
+        }
+    }
+
+    private func appAccountToken() -> UUID? {
+        guard let uid = AuthViewModel.shared.currentUser?.uid,
+              let data = uid.data(using: .utf8) else {
+            return nil
+        }
+        let digest = SHA256.hash(data: data)
+        let bytes = Array(digest.prefix(16))
+        let formatted = bytes.enumerated().map { index, byte -> String in
+            let separator: String
+            switch index {
+            case 4, 6, 8, 10:
+                separator = "-"
+            default:
+                separator = ""
+            }
+            return separator + String(format: "%02x", byte)
+        }.joined()
+        return UUID(uuidString: formatted)
+    }
+
+    private static func productSortRank(for productID: String) -> Int {
+        switch productID {
+        case "pomodoro.plus.monthly":
+            return 0
+        case "pomodoro.plus.yearly":
+            return 1
+        case "pomodoro.pro.monthly":
+            return 2
+        case "pomodoro.pro.yearly":
+            return 3
+        default:
+            return Int.max
+        }
+    }
+
+    func product(for productID: String) -> Product? {
+        products.first { $0.id == productID }
+    }
+
+    var currentProductID: String? {
+        lastEntitlement?.effectiveProductId ?? lastEntitlement?.productId
     }
 }

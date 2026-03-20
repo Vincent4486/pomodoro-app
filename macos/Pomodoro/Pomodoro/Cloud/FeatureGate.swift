@@ -5,6 +5,12 @@ import FirebaseFunctions
 
 /// Entitlement-aware feature gating for cloud-powered capabilities.
 final class FeatureGate: ObservableObject {
+    private struct CachedEntitlement: Codable {
+        let uid: String
+        let tier: Tier
+        let subscriptionEndAt: Date?
+    }
+
     struct AIUsageProgress {
         let title: String
         let usedRatio: Double
@@ -14,7 +20,7 @@ final class FeatureGate: ObservableObject {
         }
     }
 
-    enum Tier: String, Decodable {
+    enum Tier: String, Codable {
         case free
         case beta
         case plus
@@ -37,13 +43,17 @@ final class FeatureGate: ObservableObject {
 
     private var authListener: AuthStateDidChangeListenerHandle?
     private let functions: Functions
+    private let defaults: UserDefaults
+    private static let cachedEntitlementKey = "feature_gate.cached_entitlement"
 
-    private init(functions: Functions? = nil) {
+    private init(functions: Functions? = nil, defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         if let functions {
             self.functions = functions
         } else {
             self.functions = Functions.functions(region: "us-central1")
         }
+        restoreCachedEntitlementIfAvailable()
         listenForAuthChanges()
     }
 
@@ -111,6 +121,28 @@ final class FeatureGate: ObservableObject {
 
     func canUseAIScheduling() -> Bool {
         tier == .pro || tier == .developer
+    }
+
+    var canUseFullscreenFlow: Bool {
+        switch tier {
+        case .plus, .pro, .beta, .developer:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var canUseCustomFlowBackgrounds: Bool {
+        canUseFullscreenFlow
+    }
+
+    var canUseCustomFlowLayout: Bool {
+        switch tier {
+        case .pro, .developer:
+            return true
+        default:
+            return false
+        }
     }
 
     var canUseAIAssistantBreakdown: Bool {
@@ -259,6 +291,14 @@ final class FeatureGate: ObservableObject {
         await refreshAllowance()
     }
 
+    func refreshAllowanceInBackground() {
+        guard AuthViewModel.shared.isAuthenticated else { return }
+        guard !isRefreshingAllowance else { return }
+        Task { @MainActor in
+            await refreshAllowance()
+        }
+    }
+
     @MainActor
     func refreshAllowance() async {
         guard AuthViewModel.shared.isAuthenticated else {
@@ -288,6 +328,7 @@ final class FeatureGate: ObservableObject {
                 if user == nil {
                     self.resetToSignedOutState()
                 } else {
+                    self.restoreCachedEntitlementIfAvailable()
                     await self.refreshAllowance()
                 }
             }
@@ -306,6 +347,17 @@ final class FeatureGate: ObservableObject {
     }
 
     @MainActor
+    private func restoreCachedEntitlementIfAvailable() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        guard let data = defaults.data(forKey: Self.cachedEntitlementKey) else { return }
+        guard let cached = try? JSONDecoder().decode(CachedEntitlement.self, from: data) else { return }
+        guard cached.uid == uid else { return }
+
+        tier = cached.tier
+        subscriptionEndAt = cached.subscriptionEndAt
+    }
+
+    @MainActor
     private func apply(payload: AllowancePayload) {
         if let uid = Auth.auth().currentUser?.uid,
            uid == "1ebilryd5YhIgWe7zVGzw3yQZTq1" {
@@ -317,6 +369,7 @@ final class FeatureGate: ObservableObject {
             geminiFlash3MonthlyLimit = payload.geminiFlash3MonthlyLimit
             allowanceResetAt = payload.resetAt
             subscriptionEndAt = payload.subscriptionEndAt
+            persistCachedEntitlement(uid: uid, tier: .developer, subscriptionEndAt: payload.subscriptionEndAt)
             return
         }
 
@@ -327,6 +380,15 @@ final class FeatureGate: ObservableObject {
         geminiFlash3MonthlyLimit = payload.geminiFlash3MonthlyLimit
         allowanceResetAt = payload.resetAt
         subscriptionEndAt = payload.subscriptionEndAt
+        if let uid = Auth.auth().currentUser?.uid {
+            persistCachedEntitlement(uid: uid, tier: tier, subscriptionEndAt: payload.subscriptionEndAt)
+        }
+    }
+
+    private func persistCachedEntitlement(uid: String, tier: Tier, subscriptionEndAt: Date?) {
+        let cached = CachedEntitlement(uid: uid, tier: tier, subscriptionEndAt: subscriptionEndAt)
+        guard let data = try? JSONEncoder().encode(cached) else { return }
+        defaults.set(data, forKey: Self.cachedEntitlementKey)
     }
 
     private func decodeAllowancePayload(from data: Any) throws -> AllowancePayload {

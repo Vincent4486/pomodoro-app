@@ -52,21 +52,7 @@ struct OnboardingFlowView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
-                    .ignoresSafeArea()
-
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.18),
-                        Color.accentColor.opacity(0.08),
-                        Color.black.opacity(0.06)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                onboardingBackdrop
+                AppBackground()
 
                 VStack(spacing: 0) {
                     topBar
@@ -114,29 +100,6 @@ struct OnboardingFlowView: View {
             await subscriptionStore.ensureProductsLoaded()
             await authViewModel.preparePurchaseReadiness()
         }
-    }
-
-    private var onboardingBackdrop: some View {
-        ZStack {
-            Circle()
-                .fill(Color.accentColor.opacity(0.07))
-                .frame(width: 280, height: 280)
-                .blur(radius: 96)
-                .offset(x: -240, y: -170)
-
-            Circle()
-                .fill(Color.white.opacity(0.09))
-                .frame(width: 240, height: 240)
-                .blur(radius: 100)
-                .offset(x: 260, y: 120)
-
-            RoundedRectangle(cornerRadius: 44, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .frame(width: 460, height: 180)
-                .blur(radius: 110)
-                .offset(x: 80, y: -120)
-        }
-        .allowsHitTesting(false)
     }
 
     private var topBar: some View {
@@ -1031,6 +994,48 @@ struct OnboardingFlowView: View {
         do {
             try await operation()
         } catch {}
+    }
+}
+
+struct AppBackground: View {
+    var body: some View {
+        ZStack {
+            VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                .ignoresSafeArea()
+
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.18),
+                    Color.accentColor.opacity(0.08),
+                    Color.black.opacity(0.06)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.07))
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 96)
+                    .offset(x: -240, y: -170)
+
+                Circle()
+                    .fill(Color.white.opacity(0.09))
+                    .frame(width: 240, height: 240)
+                    .blur(radius: 100)
+                    .offset(x: 260, y: 120)
+
+                RoundedRectangle(cornerRadius: 44, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .frame(width: 460, height: 180)
+                    .blur(radius: 110)
+                    .offset(x: 80, y: -120)
+            }
+            .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
     }
 }
 

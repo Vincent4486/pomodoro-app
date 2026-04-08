@@ -39,11 +39,11 @@ final class LanguageManager: ObservableObject {
 
     static let shared = LanguageManager()
 
+    @Published private(set) var locale: Locale
     @Published var currentLanguage: AppLanguage {
         didSet {
             guard oldValue != currentLanguage else { return }
-            defaults.set(currentLanguage.rawValue, forKey: defaultsKey)
-            reloadActiveDictionary()
+            applyCurrentLanguage(persistSelection: true)
         }
     }
 
@@ -56,29 +56,24 @@ final class LanguageManager: ObservableObject {
     }
 
     private let defaults = UserDefaults.standard
-    private let defaultsKey = "app.localization.selectedLanguage"
+    private let defaultsKey = "app_language"
+    private let legacyDefaultsKey = "app.localization.selectedLanguage"
     private var localeObserver: NSObjectProtocol?
     private var englishDictionary: [String: String] = [:]
 
     private init() {
-        if let raw = defaults.string(forKey: defaultsKey) {
-            switch raw {
-            case "system":
-                currentLanguage = .auto
-            case "simplifiedChinese":
-                currentLanguage = .chinese
-            default:
-                currentLanguage = AppLanguage(rawValue: raw) ?? .auto
-            }
-        } else {
-            currentLanguage = .auto
-        }
+        let savedLanguage = defaults.string(forKey: defaultsKey)
+            ?? defaults.string(forKey: legacyDefaultsKey)
+            ?? Locale.current.identifier
+        let initialLanguage = Self.appLanguage(for: savedLanguage)
+        currentLanguage = initialLanguage
+        locale = Self.locale(for: initialLanguage)
 
         englishDictionary = loadDictionary(resourceCode: "en")
         if englishDictionary.isEmpty {
             englishDictionary = loadFromStringsFile(localeIdentifier: "en")
         }
-        reloadActiveDictionary()
+        applyCurrentLanguage(persistSelection: false)
 
         localeObserver = NotificationCenter.default.addObserver(
             forName: NSLocale.currentLocaleDidChangeNotification,
@@ -87,7 +82,7 @@ final class LanguageManager: ObservableObject {
         ) { [weak self] _ in
             guard let self else { return }
             if self.currentLanguage == .auto {
-                self.reloadActiveDictionary()
+                self.applyCurrentLanguage(persistSelection: false)
             }
         }
     }
@@ -98,13 +93,16 @@ final class LanguageManager: ObservableObject {
         }
     }
 
-    var localeOverride: Locale? {
-        guard let id = currentLanguage.localeIdentifier else { return nil }
-        return Locale(identifier: id)
+    var effectiveLocale: Locale {
+        locale
     }
 
-    var effectiveLocale: Locale {
-        localeOverride ?? .autoupdatingCurrent
+    func setLanguage(_ identifier: String) {
+        currentLanguage = Self.appLanguage(for: identifier)
+    }
+
+    func setLanguage(_ language: AppLanguage) {
+        currentLanguage = language
     }
 
     func text(_ key: String) -> String {
@@ -119,6 +117,15 @@ final class LanguageManager: ObservableObject {
         let formatString = text(key)
         guard !arguments.isEmpty else { return formatString }
         return String(format: formatString, locale: effectiveLocale, arguments: arguments)
+    }
+
+    private func applyCurrentLanguage(persistSelection: Bool) {
+        locale = Self.locale(for: currentLanguage)
+        if persistSelection {
+            defaults.set(storedIdentifier(for: currentLanguage), forKey: defaultsKey)
+            defaults.set(currentLanguage.rawValue, forKey: legacyDefaultsKey)
+        }
+        reloadActiveDictionary()
     }
 
     private func reloadActiveDictionary() {
@@ -168,6 +175,48 @@ final class LanguageManager: ObservableObject {
             return "zh"
         }
         return "en"
+    }
+
+    private static func appLanguage(for identifier: String) -> AppLanguage {
+        switch identifier {
+        case "system", "auto":
+            return .auto
+        case "simplifiedChinese", "zh", "zh-Hans", "zh_CN", "zh-CN":
+            return .chinese
+        case "en", "en_US", "en-US":
+            return .english
+        default:
+            let normalized = identifier.lowercased()
+            if normalized.hasPrefix("zh") {
+                return .chinese
+            }
+            if normalized.hasPrefix("en") {
+                return .english
+            }
+            return .auto
+        }
+    }
+
+    private static func locale(for language: AppLanguage) -> Locale {
+        switch language {
+        case .auto:
+            return .autoupdatingCurrent
+        case .english:
+            return Locale(identifier: "en")
+        case .chinese:
+            return Locale(identifier: "zh-Hans")
+        }
+    }
+
+    private func storedIdentifier(for language: AppLanguage) -> String {
+        switch language {
+        case .auto:
+            return Locale.current.identifier
+        case .english:
+            return "en"
+        case .chinese:
+            return "zh-Hans"
+        }
     }
 }
 

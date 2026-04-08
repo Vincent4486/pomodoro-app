@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 final class FlowWindowManager: ObservableObject {
+    private static let flowWindowIdentifier = NSUserInterfaceItemIdentifier("PomodoroFlowWindow")
+
     enum PremiumFeature: String, Identifiable {
         case fullscreen
         case customBackground
@@ -14,7 +16,6 @@ final class FlowWindowManager: ObservableObject {
     @Published private(set) var isFullscreenPresentation = false
     @Published private(set) var activePremiumPreview: PremiumFeature?
 
-    private weak var mainWindow: NSWindow?
     private weak var flowWindow: NSWindow?
     private var closeAfterFullscreenExit = false
     private var fullscreenExitObserver: NSObjectProtocol?
@@ -62,15 +63,10 @@ final class FlowWindowManager: ObservableObject {
         refreshFlowWindowContentIfNeeded()
     }
 
-    func registerMainWindow(_ window: NSWindow?) {
-        guard window?.identifier == .pomodoroMainWindow else { return }
-        mainWindow = window
-    }
-
     func exitFlowMode() {
         guard let window = flowWindow else {
             appState?.isInFlowMode = false
-            restoreMainWindowFocus()
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
 
@@ -141,7 +137,7 @@ final class FlowWindowManager: ObservableObject {
 
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
-        window.identifier = .pomodoroFlowWindow
+        window.identifier = Self.flowWindowIdentifier
         window.title = ""
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -194,7 +190,6 @@ final class FlowWindowManager: ObservableObject {
             .environmentObject(languageManager)
             .environmentObject(fullscreenFocusBackdropStore)
             .environmentObject(self)
-            .environment(\.locale, languageManager.effectiveLocale)
         )
     }
 
@@ -285,20 +280,7 @@ final class FlowWindowManager: ObservableObject {
             window?.close()
         }
         appState?.isInFlowMode = false
-        restoreMainWindowFocus()
-    }
-
-    private func restoreMainWindowFocus() {
-        guard let mainWindow = mainWindow ?? resolveMainWindow() else { return }
-        focus(mainWindow)
-    }
-
-    private func resolveMainWindow() -> NSWindow? {
-        let resolvedWindow = NSApp.windows.first { $0.identifier == .pomodoroMainWindow }
-        if let resolvedWindow {
-            mainWindow = resolvedWindow
-        }
-        return resolvedWindow
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func focus(_ window: NSWindow) {

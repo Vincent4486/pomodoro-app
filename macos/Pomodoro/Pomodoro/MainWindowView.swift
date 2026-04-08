@@ -87,7 +87,7 @@ struct MainWindowView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            mainWindowBackground
+            AppBackground()
             navigationShell
             popupOverlay
         }
@@ -151,10 +151,14 @@ struct MainWindowView: View {
         List(selection: $sidebarSelection) {
             ForEach(SidebarItem.visibleItems) { item in
                 Label(languageManager.text(item.localizationKey), systemImage: item.systemImage)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .tag(item)
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+        .safeAreaPadding(.top, 10)
     }
 
     private var detailView: some View {
@@ -179,7 +183,7 @@ struct MainWindowView: View {
         .id(sidebarSelection)
         .transition(sectionTransition)
         .animation(sectionTransitionAnimation, value: sidebarSelection)
-        .background(.thinMaterial)
+        .background(Color.clear)
     }
 
     private var pomodoroView: some View {
@@ -395,9 +399,9 @@ struct MainWindowView: View {
                     )
                 }
 
-                AdaptivePageGrid {
-                    GlassCardView {
-                        VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 16) {
+                    DashboardPanel {
+                        VStack(alignment: .leading, spacing: 16) {
                             SectionHeaderView(
                                 title: languageManager.text("timer.countdown"),
                                 subtitle: "Keep a simple deadline visible and adjustable without leaving the dashboard."
@@ -407,11 +411,11 @@ struct MainWindowView: View {
                             countdownConfigurationPanel
                             countdownActionsRow
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
 
-                    GlassCardView {
-                        VStack(alignment: .leading, spacing: 14) {
+                    DashboardPanel {
+                        VStack(alignment: .leading, spacing: 16) {
                             SectionHeaderView(
                                 title: "Audio",
                                 subtitle: "Ambient sound and now-playing controls stay available here."
@@ -420,9 +424,11 @@ struct MainWindowView: View {
                             Divider()
                             sourceSelector
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -438,18 +444,6 @@ struct MainWindowView: View {
         }
     }
 
-    private var mainWindowBackground: some View {
-        // Real macOS wallpaper blur using NSVisualEffectView
-        // This replaces the failed Rectangle().fill(.ultraThinMaterial) approach because:
-        // - SwiftUI Material is a compositing effect, not true vibrancy
-        // - It cannot access the desktop wallpaper layer
-        // - NSVisualEffectView with .behindWindow blending is required for wallpaper blur
-        // Note: Individual UI components (popups, buttons) may still use .ultraThinMaterial
-        // for layered glass effects on top of this main background blur
-        VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
-            .ignoresSafeArea()
-    }
-
     private var navigationShell: some View {
         NavigationSplitView(columnVisibility: $splitViewVisibility) {
             sidebar
@@ -457,7 +451,7 @@ struct MainWindowView: View {
             detailView
         }
         .navigationSplitViewStyle(.balanced)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
+        .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
         .onAppear {
             syncDurationTexts()
             syncLongBreakInterval()
@@ -528,6 +522,12 @@ struct MainWindowView: View {
                 splitViewVisibility = .all
                 sidebarSelection = .calendar
             }
+        }
+    }
+
+    private func toggleSidebar() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            splitViewVisibility = splitViewVisibility == .detailOnly ? .all : .detailOnly
         }
     }
 
@@ -1513,7 +1513,7 @@ struct MainWindowView: View {
                             source: .unknown
                         )
                     )
-                        .frame(width: 64, height: 64)
+                        .frame(width: 48, height: 48)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(appState.nowPlayingRouter.title)
@@ -1537,7 +1537,7 @@ struct MainWindowView: View {
                         } label: {
                             Image(systemName: "backward.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                                .frame(width: 34, height: 34)
+                                .frame(width: 28, height: 28)
                         }
                         .buttonStyle(.borderless)
                         .disabled(!appState.nowPlayingRouter.isAvailable)
@@ -1547,7 +1547,7 @@ struct MainWindowView: View {
                         } label: {
                             Image(systemName: appState.nowPlayingRouter.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 18, weight: .semibold))
-                                .frame(width: 42, height: 42)
+                                .frame(width: 34, height: 34)
                                 .foregroundStyle(.white)
                                 .background(Circle().fill(Color.accentColor))
                         }
@@ -1559,7 +1559,7 @@ struct MainWindowView: View {
                         } label: {
                             Image(systemName: "forward.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                                .frame(width: 34, height: 34)
+                                .frame(width: 28, height: 28)
                         }
                         .buttonStyle(.borderless)
                         .disabled(!appState.nowPlayingRouter.isAvailable)
@@ -1571,7 +1571,7 @@ struct MainWindowView: View {
                     HStack(alignment: .center, spacing: 14) {
                         ambientIcon(for: type)
                             .font(.system(size: 30, weight: .semibold))
-                            .frame(width: 64, height: 64)
+                            .frame(width: 48, height: 48)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .fill(Color.primary.opacity(0.08))
@@ -1592,7 +1592,7 @@ struct MainWindowView: View {
                         } label: {
                             Image(systemName: musicController.playbackState == .playing ? "pause.fill" : "play.fill")
                                 .font(.system(size: 18, weight: .semibold))
-                                .frame(width: 42, height: 42)
+                                .frame(width: 34, height: 34)
                                 .foregroundStyle(.white)
                                 .background(Circle().fill(Color.accentColor))
                         }
@@ -1609,6 +1609,8 @@ struct MainWindowView: View {
                                     withAnimation(.easeOut(duration: 0.2)) { ambientSliderEditing = editing }
                                 }
                             })
+                            .controlSize(.small)
+                            .frame(height: 24)
                             // Smooth fill animation to avoid abrupt jumps.
                             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: musicController.focusVolume)
                             // Tactile scale while dragging; small enough to avoid layout shift.
@@ -1629,7 +1631,7 @@ struct MainWindowView: View {
                 case .external(let media):
                     HStack(alignment: .center, spacing: 14) {
                         externalArtwork(media)
-                            .frame(width: 64, height: 64)
+                            .frame(width: 48, height: 48)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(media.title)
@@ -1651,7 +1653,7 @@ struct MainWindowView: View {
                         } label: {
                             Image(systemName: "playpause.fill")
                                 .font(.system(size: 18, weight: .semibold))
-                                .frame(width: 42, height: 42)
+                                .frame(width: 34, height: 34)
                                 .foregroundStyle(.white)
                                 .background(Circle().fill(Color.accentColor))
                         }
@@ -1662,6 +1664,8 @@ struct MainWindowView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Slider(value: .constant(Double(musicController.focusVolume)), in: 0...1, onEditingChanged: { _ in })
+                                .controlSize(.small)
+                                .frame(height: 24)
                                 .disabled(true)
                                 // Soft hover feedback without altering layout or color palette.
                                 .opacity(systemSliderHover ? 1.0 : 0.92)
@@ -1681,9 +1685,9 @@ struct MainWindowView: View {
                         ZStack {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .strokeBorder(Color.secondary.opacity(0.15))
-                                .frame(width: 64, height: 64)
+                                .frame(width: 48, height: 48)
                             Image(systemName: "music.note")
-                                .font(.system(size: 26, weight: .semibold))
+                                .font(.system(size: 22, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
 
@@ -1709,6 +1713,8 @@ struct MainWindowView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             appState.nowPlayingRouter.startPollingIfNeeded()
         }
@@ -1738,6 +1744,8 @@ struct MainWindowView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func selectorButton(title: String, isActive: Bool, isDisabled: Bool, action: @escaping () -> Void) -> some View {
@@ -1745,8 +1753,8 @@ struct MainWindowView: View {
             Text(title)
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .foregroundStyle(isActive ? .white : .primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(
                     Capsule(style: .continuous)
                         .fill(isActive ? Color.accentColor : Color.primary.opacity(0.08))
@@ -3328,12 +3336,36 @@ private struct GlassCardView<Content: View>: View {
     var body: some View {
         content
             .padding(18)
-            .background(.regularMaterial)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.05), radius: 22, x: 0, y: 14)
+    }
+}
+
+private struct DashboardPanel<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .frame(maxWidth: .infinity, minHeight: 248, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -3506,11 +3538,11 @@ private struct SettingsSectionCard<Content: View>: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(.thinMaterial)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -3544,12 +3576,15 @@ private struct SettingsModuleCard<Content: View>: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.regularMaterial)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor).opacity(isHovering ? 0.85 : 0.55), lineWidth: 1)
+                .stroke(Color.white.opacity(isHovering ? 0.18 : 0.12), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(isHovering ? 0.08 : 0.03), radius: isHovering ? 14 : 8, y: isHovering ? 8 : 4)
+        .shadow(color: .black.opacity(isHovering ? 0.07 : 0.05), radius: isHovering ? 18 : 14, y: isHovering ? 10 : 8)
         .scaleEffect(isHovering ? 1.004 : 1.0)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovering)
         .onHover { hovering in
@@ -3607,7 +3642,10 @@ private struct SettingsPlansSheet: View {
         }
         .padding(24)
         .frame(minWidth: 760, minHeight: 640)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.regularMaterial)
+        )
     }
 }
 

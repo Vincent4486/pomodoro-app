@@ -11,7 +11,6 @@ import Foundation
 @MainActor
 struct ContentView: View {
     @EnvironmentObject private var onboardingState: OnboardingState
-    @EnvironmentObject private var flowWindowManager: FlowWindowManager
 
     var body: some View {
         ZStack {
@@ -23,14 +22,6 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .background(
-            WindowBackgroundConfigurator(
-                chromeStyle: onboardingState.isPresented ? .onboarding : .main,
-                onResolveWindow: { window in
-                    flowWindowManager.registerMainWindow(window)
-                }
-            )
-        )
         .animation(.easeInOut(duration: 0.22), value: onboardingState.isPresented)
     }
 }
@@ -85,6 +76,7 @@ struct PremiumButton: View {
             .environmentObject(OnboardingState())
             .environmentObject(AuthViewModel.shared)
             .environmentObject(AppTypography.shared)
+            .environmentObject(FlowWindowManager())
     }
 }
 #endif

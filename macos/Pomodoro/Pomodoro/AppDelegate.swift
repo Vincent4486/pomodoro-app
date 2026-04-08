@@ -6,13 +6,10 @@
 //
 
 import AppKit
-import FirebaseAuth
 import FirebaseCore
-import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private weak var mainWindow: NSWindow?
     private var appStateConfigured = false
     private var menuBarController: MenuBarController?
     private var openMainWindowScene: (() -> Void)?
@@ -33,9 +30,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             configureControllersIfNeeded()
         }
     }
-    var onboardingState: OnboardingState?
-    var authViewModel: AuthViewModel?
-
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
@@ -46,11 +40,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureFirebase()
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            guard let self, let window = self.existingMainWindow() else { return }
-            window.applyPomodoroWindowChrome(currentWindowChromeStyle())
-        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -65,51 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func openMainWindow() {
-        if let window = mainWindow ?? existingMainWindow() {
-            focus(window: window)
-            return
-        }
-
+        NSApplication.shared.activate(ignoringOtherApps: true)
         openMainWindowScene?()
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            guard let self, let openedWindow = self.existingMainWindow() else { return }
-            self.focus(window: openedWindow)
-        }
     }
 
     private func quitApp() {
         NSApplication.shared.terminate(nil)
-    }
-
-    private func existingMainWindow() -> NSWindow? {
-        let windows = NSApplication.shared.windows
-        let identifiedWindow = windows.first { window in
-            window.identifier == .pomodoroMainWindow
-        }
-        let window = identifiedWindow ?? windows.first { window in
-            window.styleMask.contains(.titled)
-                && window.level == .normal
-                && window.canBecomeMain
-                && !window.isExcludedFromWindowsMenu
-        }
-        if let window {
-            mainWindow = window
-        }
-        return window
-    }
-
-    private func focus(window: NSWindow) {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        if window.isMiniaturized {
-            window.deminiaturize(nil)
-        }
-        window.applyPomodoroWindowChrome(currentWindowChromeStyle())
-        window.makeKeyAndOrderFront(nil)
-    }
-
-    private func currentWindowChromeStyle() -> PomodoroWindowChromeStyle {
-        onboardingState?.isPresented == true ? .onboarding : .main
     }
 
     private func configureControllersIfNeeded() {

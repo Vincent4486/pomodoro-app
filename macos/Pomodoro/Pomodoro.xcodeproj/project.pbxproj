@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0406D042B8164EA2B18986C1 /* WindowBackgroundConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */; };
 		18D4E01A4A3F4C07A9E05001 /* AppTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D4E0194A3F4C07A9E05001 /* AppTypography.swift */; };
 		1C500AF364889EDC9C8772BC /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB46B7CF8A7C0F510CF4 /* AuthManager.swift */; };
 		1C500AF464889EDC9C8772BC /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83E7FB47B7CF8A7C0F510CF4 /* AuthViewModel.swift */; };
@@ -108,7 +107,6 @@
 		2F0C10002BCD000000000001 /* FlowWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowWindowManager.swift; sourceTree = "<group>"; };
 		36B4A1D0B6904D3B9A1E8353 /* VisualEffectBlur.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectBlur.swift; sourceTree = "<group>"; };
 		379E0B0F492E771413BBB197 /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
-		49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowBackgroundConfigurator.swift; sourceTree = "<group>"; };
 		4BDE965F88F54754BCBB5DF2 /* CalendarDayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarDayView.swift; sourceTree = "<group>"; };
 		7C217B302F3F89DD0076D4DA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		7C360D382F191F17007313D3 /* Pomodoro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pomodoro.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -306,7 +304,6 @@
 				ABFA2AD704BE4758B0A786D8 /* MediaControlBar.swift */,
 				7C360D982F191F17007313D3 /* MusicPanelView.swift */,
 				36B4A1D0B6904D3B9A1E8353 /* VisualEffectBlur.swift */,
-				49393474CCC34E2091E176A1 /* WindowBackgroundConfigurator.swift */,
 				B6A2000A2FFD4BD7B90F8AC1 /* OnboardingFlowView.swift */,
 				D1A1B0060000000000000001 /* CalendarView.swift */,
 				4BDE965F88F54754BCBB5DF2 /* CalendarDayView.swift */,
@@ -510,7 +507,6 @@
 				7C360D582F191F17007313D3 /* CountdownTimerEngine.swift in Sources */,
 				7C360D592F191F17007313D3 /* PomodoroTimerEngine.swift in Sources */,
 				815B35241A15471083A7F5C2 /* VisualEffectBlur.swift in Sources */,
-				0406D042B8164EA2B18986C1 /* WindowBackgroundConfigurator.swift in Sources */,
 				B6A200102FFD4BD7B90F8AC1 /* NowPlayingRouter.swift in Sources */,
 				B6A200112FFD4BD7B90F8AC1 /* NowPlayingProvider.swift in Sources */,
 				B6A200122FFD4BD7B90F8AC1 /* AppleMusicProvider.swift in Sources */,

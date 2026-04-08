@@ -7,7 +7,6 @@
 
 import SwiftUI
 import FirebaseCore
-import AppKit
 
 @MainActor
 @main
@@ -57,6 +56,8 @@ struct PomodoroApp: App {
         WindowGroup("Orchestrana", id: Self.mainWindowID) {
             rootContentView
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             CommandMenu("Timer") {
                 Button("Start Session") {
@@ -181,13 +182,10 @@ struct PomodoroApp: App {
             .background(MainWindowSceneOpenerBridge(onRegister: { action in
                 appDelegate.registerMainWindowSceneOpener(action)
             }))
-            .id(languageManager.currentLanguage.rawValue)
             .task(id: ObjectIdentifier(appState)) {
                 appDelegate.appState = appState
                 appDelegate.musicController = musicController
                 appDelegate.audioSourceStore = audioSourceStore
-                appDelegate.onboardingState = onboardingState
-                appDelegate.authViewModel = authViewModel
                 flowWindowManager.configure(
                     appState: appState,
                     musicController: musicController,
@@ -198,18 +196,8 @@ struct PomodoroApp: App {
                     fullscreenFocusBackdropStore: fullscreenFocusBackdropStore
                 )
             }
-            .onAppear {
-                enforceWindowedMainWindow()
-            }
-            .onReceive(
-                NotificationCenter.default.publisher(
-                    for: NSApplication.willUpdateNotification
-                )
-            ) { _ in
-                enforceWindowedMainWindow()
-            }
 
-        content.environment(\.locale, languageManager.effectiveLocale)
+        content
     }
 
     private struct MainWindowSceneOpenerBridge: View {
@@ -263,14 +251,5 @@ struct PomodoroApp: App {
     private func navigateTo(_ notification: Notification.Name) {
         appDelegate.openMainWindow()
         NotificationCenter.default.post(name: notification, object: nil)
-    }
-
-    private func enforceWindowedMainWindow() {
-        for window in NSApplication.shared.windows {
-            if window.identifier == .pomodoroMainWindow {
-                let chromeStyle: PomodoroWindowChromeStyle = onboardingState.isPresented ? .onboarding : .main
-                window.applyPomodoroWindowChrome(chromeStyle)
-            }
-        }
     }
 }

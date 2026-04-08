@@ -9,10 +9,6 @@ import SwiftUI
 import FirebaseCore
 
 enum FirebaseBootstrap {
-    private static let knownPlaceholderGoogleAppIDs: Set<String> = [
-        "1:455801282325:ios:f98ba251e3e108e20bd31c"
-    ]
-
     @discardableResult
     static func configureIfPossible() -> Bool {
         if FirebaseApp.app() != nil {
@@ -42,17 +38,13 @@ enum FirebaseBootstrap {
             return false
         }
 
-        if knownPlaceholderGoogleAppIDs.contains(googleAppID) {
-            print("[Firebase] Skipping configure: bundled plist is the repository placeholder for project \(projectID).")
-            return false
-        }
-
         if !bundleID.isEmpty, !runtimeBundleID.isEmpty, bundleID != runtimeBundleID {
             print("[Firebase] Skipping configure: plist bundle ID \(bundleID) does not match app bundle ID \(runtimeBundleID).")
             return false
         }
 
         FirebaseApp.configure()
+        print("[Firebase] configureIfPossible succeeded for project \(projectID) with bundle ID \(bundleID).")
         return FirebaseApp.app() != nil
     }
 }

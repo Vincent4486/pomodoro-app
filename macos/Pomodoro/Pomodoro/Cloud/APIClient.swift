@@ -717,6 +717,12 @@ final class SubscriptionAPIClient {
 
 @MainActor
 final class SubscriptionStore: ObservableObject {
+    private struct EmptyStoreProductsError: LocalizedError {
+        var errorDescription: String? {
+            "No subscription products were returned by StoreKit."
+        }
+    }
+
     enum SubscriptionChangeKind: String {
         case newPurchase = "new_purchase"
         case upgrade
@@ -790,6 +796,9 @@ final class SubscriptionStore: ObservableObject {
         for attempt in 1...maxAttempts {
             do {
                 let loadedProducts = try await Product.products(for: productIDs)
+                guard !loadedProducts.isEmpty else {
+                    throw EmptyStoreProductsError()
+                }
                 products = loadedProducts.sorted { lhs, rhs in
                     let lhsRank = Self.productSortRank(for: lhs.id)
                     let rhsRank = Self.productSortRank(for: rhs.id)

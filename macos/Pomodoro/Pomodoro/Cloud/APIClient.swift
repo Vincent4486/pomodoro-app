@@ -762,6 +762,7 @@ final class SubscriptionAPIClient {
     func verify(transactionId: String) async throws -> SubscriptionEntitlement {
         let token = try await AuthViewModel.shared.getValidIDToken()
         let endpoint = try resolveEndpointURL()
+        print("[SubscriptionAPI] Verifying transaction \(transactionId) at \(endpoint.absoluteString)")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -785,11 +786,14 @@ final class SubscriptionAPIClient {
         switch httpResponse.statusCode {
         case 200...299:
             do {
-                return try JSONDecoder().decode(SubscriptionEntitlement.self, from: data)
+                let entitlement = try JSONDecoder().decode(SubscriptionEntitlement.self, from: data)
+                print("[SubscriptionAPI] Transaction \(transactionId) verified")
+                return entitlement
             } catch {
                 throw SubscriptionAPIError.invalidResponse
             }
         default:
+            print("[SubscriptionAPI] Verification failed for transaction \(transactionId) with HTTP \(httpResponse.statusCode)")
             throw SubscriptionAPIError.http(
                 statusCode: httpResponse.statusCode,
                 message: extractErrorMessage(from: data)
@@ -961,9 +965,9 @@ final class SubscriptionStore: ObservableObject {
             switch result {
             case .success(let verification):
                 let transaction = try verified(verification)
-                await transaction.finish()
                 do {
                     lastEntitlement = try await apiClient.verify(transactionId: String(transaction.id))
+                    await transaction.finish()
                     await FeatureGate.shared.refreshAllowance()
                 } catch {
                     errorMessage = "Purchase completed. Verification may take a moment."
@@ -988,10 +992,11 @@ final class SubscriptionStore: ObservableObject {
 
         do {
             try await AppStore.sync()
-            await syncCurrentEntitlements()
         } catch {
-            errorMessage = error.localizedDescription
+            print("[StoreKit] AppStore.sync failed during restore: \((error as NSError).localizedDescription)")
         }
+
+        await syncCurrentEntitlements()
     }
 
     func syncCurrentEntitlements() async {
@@ -1000,7 +1005,14 @@ final class SubscriptionStore: ObservableObject {
 
         do {
             for await verification in Transaction.currentEntitlements {
-                let transaction = try verified(verification)
+                let transaction: Transaction
+                do {
+                    transaction = try verified(verification)
+                } catch {
+                    print("[StoreKit] Skipping unverified current entitlement: \((error as NSError).localizedDescription)")
+                    continue
+                }
+
                 latestEntitlement = try await apiClient.verify(transactionId: String(transaction.id))
             }
 
@@ -1017,9 +1029,9 @@ final class SubscriptionStore: ObservableObject {
                 let transaction = try await MainActor.run {
                     try self.verified(verification)
                 }
-                await transaction.finish()
 
                 let entitlement = try await apiClient.verify(transactionId: String(transaction.id))
+                await transaction.finish()
                 await MainActor.run {
                     self.lastEntitlement = entitlement
                 }
@@ -1044,15 +1056,25 @@ final class SubscriptionStore: ObservableObject {
     private func activeSubscriptionContext(preferredProduct: Product? = nil) async throws -> ActiveSubscriptionContext? {
         if let preferredProduct,
            let subscription = preferredProduct.subscription {
-            let statuses = try await subscription.status
-            if let context = try verifiedActiveSubscriptionContext(from: statuses) {
-                return context
+            do {
+                let statuses = try await subscription.status
+                if let context = try verifiedActiveSubscriptionContext(from: statuses) {
+                    return context
+                }
+            } catch {
+                print("[StoreKit] Could not load subscription status before purchase: \((error as NSError).localizedDescription)")
             }
         }
 
         var fallbackTransaction: Transaction?
         for await verification in Transaction.currentEntitlements {
-            let transaction = try verified(verification)
+            let transaction: Transaction
+            do {
+                transaction = try verified(verification)
+            } catch {
+                print("[StoreKit] Skipping unverified entitlement during purchase preflight: \((error as NSError).localizedDescription)")
+                continue
+            }
             if productIDs.contains(transaction.productID) {
                 fallbackTransaction = transaction
                 break
@@ -1096,11 +1118,11 @@ final class SubscriptionStore: ObservableObject {
             guard let tier = subscriptionTier(for: transaction.productID) else {
                 continue
             }
-            let renewalInfo = try verified(status.renewalInfo)
+            let renewalInfo = try? verified(status.renewalInfo)
             return ActiveSubscriptionContext(
                 transaction: transaction,
                 renewalInfo: renewalInfo,
-                renewalInfoJWS: status.renewalInfo.jwsRepresentation,
+                renewalInfoJWS: renewalInfo == nil ? nil : status.renewalInfo.jwsRepresentation,
                 productID: transaction.productID,
                 tier: tier,
                 expirationDate: transaction.expirationDate

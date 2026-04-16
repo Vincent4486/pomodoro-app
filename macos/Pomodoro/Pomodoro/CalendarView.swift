@@ -535,7 +535,7 @@ struct CalendarView: View {
             if action == .reschedule {
                 rescheduleError = "Failed to reschedule. Please try again."
             } else {
-                aiAssistantErrorMessage = (error as NSError).localizedDescription
+                aiAssistantErrorMessage = AIService.userFacingErrorMessage(error)
             }
         }
     }
@@ -831,7 +831,7 @@ struct CalendarView: View {
                nsError.code == FunctionsErrorCode.deadlineExceeded.rawValue {
                 rescheduleError = "Scheduling request timed out. Please try again."
             } else {
-                rescheduleError = error.localizedDescription
+                rescheduleError = AIService.userFacingErrorMessage(error)
             }
         }
     }
@@ -1958,7 +1958,7 @@ private struct EventTaskDetailSheet: View {
             let tasks = response.tasks.map { PlanningItem.EventTask(title: $0, source: .ai) }
             planningStore.replaceEventTasks(eventID: eventID, tasks: tasks)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = AIService.userFacingErrorMessage(error)
         }
     }
 

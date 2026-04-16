@@ -616,7 +616,7 @@ struct PlansComparisonView: View {
                         tier: tier,
                         billingCycle: selectedBillingCycle.wrappedValue,
                         keyFeatures: keyFeatures(for: tier),
-                        currentTier: featureGate.tier,
+                        currentTier: subscriptionStore.currentTier,
                         currentProductID: subscriptionStore.currentProductID,
                         product: product(for: tier),
                         isPurchasing: activePurchaseMatches(tier: tier),
@@ -1213,7 +1213,7 @@ struct SubscriptionUpgradeSheetView: View {
     }
 
     private var isUpgradingCurrentPlan: Bool {
-        if PlanTier.from(featureTier: featureGate.tier) == context.requiredTier,
+        if PlanTier.from(featureTier: subscriptionStore.currentTier) == context.requiredTier,
            context.requiredTier != .free {
             return true
         }

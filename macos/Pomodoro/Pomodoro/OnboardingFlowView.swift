@@ -45,7 +45,7 @@ struct OnboardingFlowView: View {
     }
 
     private var shouldShowUpgradeAwareness: Bool {
-        let tier = PlanTier.from(featureTier: featureGate.tier)
+        let tier = PlanTier.from(featureTier: subscriptionStore.currentTier)
         return tier == .free && subscriptionStore.currentProductID == nil
     }
 

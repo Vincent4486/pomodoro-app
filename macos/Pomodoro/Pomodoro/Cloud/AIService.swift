@@ -207,11 +207,14 @@ final class AIService {
 
     enum AIServiceError: LocalizedError {
         case invalidResponse
+        case privacyRestricted
 
         var errorDescription: String? {
             switch self {
             case .invalidResponse:
                 return "AI planning returned an invalid response."
+            case .privacyRestricted:
+                return "This feature uses user-created content and is local-only for privacy."
             }
         }
     }
@@ -221,6 +224,77 @@ final class AIService {
     private let functions: Functions
     private let aiProxyClient: AIProxyClient
     private let insightsCache: AIInsightCacheStore
+
+    static func userFacingErrorMessage(_ error: Error) -> String {
+        let rawMessage = (error as NSError).localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawMessage.isEmpty else {
+            return "AI request failed. Please try again."
+        }
+
+        let backendMessage = extractBackendErrorMessage(from: rawMessage) ?? rawMessage
+        let cleanedMessage = backendMessage
+            .replacingOccurrences(of: "\\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "Al quota", with: "AI quota")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let lowercased = cleanedMessage.lowercased()
+        if lowercased.contains("quota_exceeded") || lowercased.contains("quota exceeded") {
+            return quotaExceededMessage(from: cleanedMessage)
+        }
+
+        if lowercased.contains("subscription_inactive") || lowercased.contains("subscription is not active") {
+            return "Your subscription is not active for this AI feature."
+        }
+
+        if looksLikeRawBackendEnvelope(rawMessage), cleanedMessage == rawMessage {
+            return "AI request failed. Please try again."
+        }
+
+        return cleanedMessage
+    }
+
+    private static func extractBackendErrorMessage(from rawMessage: String) -> String? {
+        let pattern = #""message"\s*:\s*"([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(rawMessage.startIndex..<rawMessage.endIndex, in: rawMessage)
+        guard let match = regex.firstMatch(in: rawMessage, range: range),
+              match.numberOfRanges > 1,
+              let messageRange = Range(match.range(at: 1), in: rawMessage) else {
+            return nil
+        }
+        return String(rawMessage[messageRange])
+    }
+
+    private static func quotaExceededMessage(from message: String) -> String {
+        if let resetDate = quotaResetDate(from: message) {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            return "AI quota exceeded. Try again after \(formatter.string(from: resetDate))."
+        }
+        return "AI quota exceeded. Try again after your quota resets."
+    }
+
+    private static func quotaResetDate(from message: String) -> Date? {
+        let pattern = #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(message.startIndex..<message.endIndex, in: message)
+        guard let match = regex.firstMatch(in: message, range: range),
+              let dateRange = Range(match.range, in: message) else {
+            return nil
+        }
+        return ISO8601DateFormatter().date(from: String(message[dateRange]))
+    }
+
+    private static func looksLikeRawBackendEnvelope(_ message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("\"error\"")
+            || lowercased.contains("(\"error\"")
+            || lowercased.contains("\"code\"")
+            || lowercased.contains("\"message\"")
+    }
 
     private init(functions: Functions? = nil) {
         self.aiProxyClient = AIProxyClient()
@@ -245,7 +319,7 @@ final class AIService {
             "estimatedHours": request.estimatedHours
         ]
 
-        print("[AIService] Calling callable taskBreakdown in us-central1 for task: \(task)")
+        print("[AIService] Calling callable taskBreakdown in us-central1")
         let result = try await callable.call(payload)
         print("[AIService] taskBreakdown response received")
         return try decodeAIPlanningResponse(from: result.data)
@@ -283,7 +357,7 @@ final class AIService {
             "notes": notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         ]
 
-        print("[AIService] Calling callable generateTaskDescription in us-central1 for title: \(title)")
+        print("[AIService] Calling callable generateTaskDescription in us-central1")
         let result = try await callable.call(payload)
         print("[AIService] generateTaskDescription response received")
         return try decodeTaskDescriptionResponse(from: result.data)
@@ -441,10 +515,6 @@ final class AIService {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let body = try encoder.encode(requestBody)
-        if let requestString = String(data: body, encoding: .utf8) {
-            print("[AIService] generateCalendarSchedule payload: \(requestString)")
-        }
-
         let jsonObject = try JSONSerialization.jsonObject(with: body)
         guard let payload = jsonObject as? [String: Any] else {
             throw AIServiceError.invalidResponse
@@ -454,10 +524,7 @@ final class AIService {
         callable.timeoutInterval = 60
         print("[AIService] Calling callable generateCalendarSchedule in us-central1")
         let result = try await callable.call(payload)
-        if let data = result.data as? [String: Any] {
-            print("[AIService] callable response: \(data)")
-        }
-
+        print("[AIService] generateCalendarSchedule response received")
         return try decodeCalendarScheduleResponse(from: result.data)
     }
 

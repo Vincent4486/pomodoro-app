@@ -1696,7 +1696,7 @@ struct TodoListView: View {
             resetEditor()
             showingEditor = false
         } catch {
-            aiPlanErrorMessage = (error as NSError).localizedDescription
+            aiPlanErrorMessage = AIService.userFacingErrorMessage(error)
         }
     }
 
@@ -1731,7 +1731,7 @@ struct TodoListView: View {
                 descriptionField = generatedDescription
             }
         } catch {
-            aiDescriptionErrorMessage = localizationManager.text("tasks.ai_description.error")
+            aiDescriptionErrorMessage = AIService.userFacingErrorMessage(error)
         }
     }
 
@@ -1752,7 +1752,7 @@ struct TodoListView: View {
             showAITaskDraftSheet = false
             aiTaskDraftPrompt = ""
         } catch {
-            aiTaskDraftErrorMessage = (error as NSError).localizedDescription
+            aiTaskDraftErrorMessage = AIService.userFacingErrorMessage(error)
         }
     }
 
@@ -1781,7 +1781,7 @@ struct TodoListView: View {
             )
             applyTaskDraftToEditor(draft)
         } catch {
-            aiTaskDraftErrorMessage = (error as NSError).localizedDescription
+            aiTaskDraftErrorMessage = AIService.userFacingErrorMessage(error)
         }
     }
 
@@ -2083,7 +2083,7 @@ struct TodoListView: View {
             )
             showAIAssistant = false
         } catch {
-            aiAssistantErrorMessage = (error as NSError).localizedDescription
+            aiAssistantErrorMessage = AIService.userFacingErrorMessage(error)
         }
     }
 

@@ -497,42 +497,6 @@ final class EventTasksAPIClient {
         let eventTasks: [EventTaskPayload]
     }
 
-    private struct SyncRequest: Encodable {
-        struct EncodedTask: Encodable {
-            let id: UUID
-            let title: String
-            let isCompleted: Bool
-            let createdAt: Date
-            let source: String
-        }
-
-        let eventId: UUID
-        let eventTitle: String
-        let eventDescription: String?
-        let startTime: Date?
-        let endTime: Date?
-        let hasTaskMode: Bool
-        let eventTasks: [EncodedTask]
-
-        init(event: PlanningItem) {
-            self.eventId = event.id
-            self.eventTitle = event.title
-            self.eventDescription = event.notes
-            self.startTime = event.startDate
-            self.endTime = event.endDate
-            self.hasTaskMode = event.hasTaskMode
-            self.eventTasks = event.eventTasks.map {
-                EncodedTask(
-                    id: $0.id,
-                    title: $0.title,
-                    isCompleted: $0.isCompleted,
-                    createdAt: $0.createdAt,
-                    source: $0.source.rawValue
-                )
-            }
-        }
-    }
-
     private struct GenerateRequest: Encodable {
         let eventId: UUID
         let eventTitle: String
@@ -592,23 +556,19 @@ final class EventTasksAPIClient {
     }
 
     func fetchState(eventID: UUID) async throws -> EventStatePayload {
-        let endpoint = try resolveEndpointURL(functionName: "getEventTasks", queryItems: [
-            URLQueryItem(name: "eventId", value: eventID.uuidString)
-        ])
-        var request = try await authorizedRequest(url: endpoint, method: "GET")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        return try await send(request, decodeAs: EventStatePayload.self)
+        EventStatePayload(
+            eventId: eventID,
+            eventTitle: nil,
+            eventDescription: nil,
+            startTime: nil,
+            endTime: nil,
+            hasTaskMode: false,
+            eventTasks: []
+        )
     }
 
     func sync(event: PlanningItem) async throws -> EventStatePayload {
-        let endpoint = try resolveEndpointURL(functionName: "syncEventTasks")
-        var request = try await authorizedRequest(url: endpoint, method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        request.httpBody = try encoder.encode(SyncRequest(event: event))
-        return try await send(request, decodeAs: EventStatePayload.self)
+        localEventState(for: event)
     }
 
     func generateTasks(for event: PlanningItem) async throws -> EventStatePayload {
@@ -628,6 +588,26 @@ final class EventTasksAPIClient {
             )
         )
         return try await send(request, decodeAs: EventStatePayload.self)
+    }
+
+    private func localEventState(for event: PlanningItem) -> EventStatePayload {
+        EventStatePayload(
+            eventId: event.id,
+            eventTitle: event.title,
+            eventDescription: event.notes,
+            startTime: event.startDate,
+            endTime: event.endDate,
+            hasTaskMode: event.hasTaskMode,
+            eventTasks: event.eventTasks.map {
+                EventTaskPayload(
+                    id: $0.id,
+                    title: $0.title,
+                    isCompleted: $0.isCompleted,
+                    createdAt: $0.createdAt,
+                    source: $0.source
+                )
+            }
+        )
     }
 
     private func authorizedRequest(url: URL, method: String) async throws -> URLRequest {
@@ -730,6 +710,9 @@ final class SubscriptionAPIClient {
 
     private struct VerifyRequest: Encodable {
         let transactionId: String
+        let originalTransactionId: String?
+        let productId: String?
+        let userId: String?
     }
 
     private struct ErrorEnvelope: Decodable {
@@ -759,7 +742,12 @@ final class SubscriptionAPIClient {
         }
     }
 
-    func verify(transactionId: String) async throws -> SubscriptionEntitlement {
+    func verify(
+        transactionId: String,
+        originalTransactionId: String? = nil,
+        productId: String? = nil,
+        userId: String? = nil
+    ) async throws -> SubscriptionEntitlement {
         let token = try await AuthViewModel.shared.getValidIDToken()
         let endpoint = try resolveEndpointURL()
         print("[SubscriptionAPI] Verifying transaction \(transactionId) at \(endpoint.absoluteString)")
@@ -769,7 +757,12 @@ final class SubscriptionAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         await AppCheckRequestAuthorizer.authorize(&request)
-        request.httpBody = try JSONEncoder().encode(VerifyRequest(transactionId: transactionId))
+        request.httpBody = try JSONEncoder().encode(VerifyRequest(
+            transactionId: transactionId,
+            originalTransactionId: originalTransactionId,
+            productId: productId,
+            userId: userId
+        ))
 
         let data: Data
         let response: URLResponse
@@ -862,6 +855,10 @@ final class SubscriptionStore: ObservableObject {
     @Published private(set) var isRestoring = false
     @Published private(set) var activePurchaseProductID: String?
     @Published private(set) var lastEntitlement: SubscriptionEntitlement?
+    @Published private(set) var isSubscribed = false
+    @Published private(set) var activeProductIDs: Set<String> = []
+    @Published private(set) var localSubscriptionTier: FeatureGate.Tier = .free
+    @Published private(set) var localSubscriptionEndAt: Date?
     @Published private(set) var productLoadErrorMessage: String?
     @Published var errorMessage: String?
 
@@ -965,14 +962,13 @@ final class SubscriptionStore: ObservableObject {
             switch result {
             case .success(let verification):
                 let transaction = try verified(verification)
-                do {
-                    lastEntitlement = try await apiClient.verify(transactionId: String(transaction.id))
-                    await transaction.finish()
-                    await FeatureGate.shared.refreshAllowance()
-                } catch {
-                    errorMessage = "Purchase completed. Verification may take a moment."
-                    await syncCurrentEntitlements()
+                guard productIDs.contains(transaction.productID) else {
+                    errorMessage = "Failed to verify transaction."
+                    return
                 }
+                applyLocalEntitlements(from: [transaction])
+                await transaction.finish()
+                syncBackendInBackground(for: transaction)
             case .pending:
                 errorMessage = "Purchase is pending approval."
             case .userCancelled:
@@ -1001,26 +997,36 @@ final class SubscriptionStore: ObservableObject {
 
     func syncCurrentEntitlements() async {
         errorMessage = nil
-        var latestEntitlement: SubscriptionEntitlement?
+        var activeTransactions: [Transaction] = []
+        var backendSyncFailed = false
 
-        do {
-            for await verification in Transaction.currentEntitlements {
-                let transaction: Transaction
-                do {
-                    transaction = try verified(verification)
-                } catch {
-                    print("[StoreKit] Skipping unverified current entitlement: \((error as NSError).localizedDescription)")
-                    continue
-                }
-
-                latestEntitlement = try await apiClient.verify(transactionId: String(transaction.id))
+        for await verification in Transaction.currentEntitlements {
+            let transaction: Transaction
+            do {
+                transaction = try verified(verification)
+            } catch {
+                print("[StoreKit] Skipping unverified current entitlement: \((error as NSError).localizedDescription)")
+                continue
             }
 
-            lastEntitlement = latestEntitlement
-            await FeatureGate.shared.refreshAllowance()
-        } catch {
-            errorMessage = error.localizedDescription
+            guard isActiveSubscriptionTransaction(transaction) else {
+                continue
+            }
+
+            activeTransactions.append(transaction)
+            do {
+                lastEntitlement = try await syncBackend(for: transaction)
+            } catch {
+                backendSyncFailed = true
+                print("[SubscriptionAPI] Backend sync failed for transaction \(transaction.id): \(error.localizedDescription)")
+            }
         }
+
+        applyLocalEntitlements(from: activeTransactions)
+        if backendSyncFailed && isSubscribed {
+            errorMessage = "Backend sync failed. Your subscription is active on this device."
+        }
+        await FeatureGate.shared.refreshAllowance()
     }
 
     private func observeTransactionUpdates() async {
@@ -1030,15 +1036,22 @@ final class SubscriptionStore: ObservableObject {
                     try self.verified(verification)
                 }
 
-                let entitlement = try await apiClient.verify(transactionId: String(transaction.id))
+                guard await MainActor.run(body: { self.isActiveSubscriptionTransaction(transaction) }) else {
+                    await transaction.finish()
+                    await syncCurrentEntitlements()
+                    continue
+                }
+
+                await MainActor.run {
+                    self.applyLocalEntitlements(from: [transaction])
+                }
                 await transaction.finish()
                 await MainActor.run {
-                    self.lastEntitlement = entitlement
+                    self.syncBackendInBackground(for: transaction)
                 }
-                await FeatureGate.shared.refreshAllowance()
             } catch {
                 await MainActor.run {
-                    self.errorMessage = "Subscription verification is delayed. Your access will sync shortly."
+                    self.errorMessage = "Failed to verify transaction."
                 }
             }
         }
@@ -1166,6 +1179,78 @@ final class SubscriptionStore: ObservableObject {
         return nil
     }
 
+    private func featureTier(for productID: String) -> FeatureGate.Tier? {
+        switch subscriptionTier(for: productID) {
+        case "plus":
+            return .plus
+        case "pro":
+            return .pro
+        default:
+            return nil
+        }
+    }
+
+    private func isActiveSubscriptionTransaction(_ transaction: Transaction) -> Bool {
+        guard productIDs.contains(transaction.productID), transaction.revocationDate == nil else {
+            return false
+        }
+        if let expirationDate = transaction.expirationDate {
+            return expirationDate > Date()
+        }
+        return true
+    }
+
+    private func applyLocalEntitlements(from transactions: [Transaction]) {
+        let activeTransactions = transactions.filter(isActiveSubscriptionTransaction)
+        let productIDs = Set(activeTransactions.map(\.productID))
+        activeProductIDs = productIDs
+        isSubscribed = !productIDs.isEmpty
+
+        guard let bestTransaction = activeTransactions.sorted(by: { lhs, rhs in
+            let lhsRank = tierRank(for: subscriptionTier(for: lhs.productID) ?? "free")
+            let rhsRank = tierRank(for: subscriptionTier(for: rhs.productID) ?? "free")
+            if lhsRank != rhsRank {
+                return lhsRank > rhsRank
+            }
+            return (lhs.expirationDate ?? .distantFuture) > (rhs.expirationDate ?? .distantFuture)
+        }).first,
+              let tier = featureTier(for: bestTransaction.productID) else {
+            localSubscriptionTier = .free
+            localSubscriptionEndAt = nil
+            return
+        }
+
+        localSubscriptionTier = tier
+        localSubscriptionEndAt = bestTransaction.expirationDate
+    }
+
+    private func syncBackendInBackground(for transaction: Transaction) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let entitlement = try await self.syncBackend(for: transaction)
+                await MainActor.run {
+                    self.lastEntitlement = entitlement
+                }
+                await FeatureGate.shared.refreshAllowance()
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "Backend sync failed. Your subscription is active on this device."
+                }
+                print("[SubscriptionAPI] Backend sync failed for transaction \(transaction.id): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func syncBackend(for transaction: Transaction) async throws -> SubscriptionEntitlement {
+        try await apiClient.verify(
+            transactionId: String(transaction.id),
+            originalTransactionId: String(transaction.originalID),
+            productId: transaction.productID,
+            userId: AuthViewModel.shared.currentUser?.uid
+        )
+    }
+
     private func tierRank(for tier: String) -> Int {
         switch tier {
         case "plus":
@@ -1225,6 +1310,17 @@ final class SubscriptionStore: ObservableObject {
     }
 
     var currentProductID: String? {
-        lastEntitlement?.effectiveProductId ?? lastEntitlement?.productId
+        activeProductIDs.sorted {
+            Self.productSortRank(for: $0) > Self.productSortRank(for: $1)
+        }.first ?? lastEntitlement?.effectiveProductId ?? lastEntitlement?.productId
+    }
+
+    var currentTier: FeatureGate.Tier {
+        if isSubscribed {
+            return localSubscriptionTier
+        }
+        return FeatureGate.Tier(rawValue: lastEntitlement?.tier ?? "") ?? .free
     }
 }
+
+typealias SubscriptionManager = SubscriptionStore

@@ -294,14 +294,6 @@ struct OrchestranaApp: App {
                 window.collectionBehavior.remove(.fullScreenPrimary)
                 window.collectionBehavior.remove(.fullScreenAuxiliary)
                 window.collectionBehavior.insert(.fullScreenNone)
-                if let zoomButton = window.standardWindowButton(.zoomButton) {
-                    zoomButton.target = window
-                    zoomButton.action = #selector(NSWindow.performZoom(_:))
-                    zoomButton.image = NSImage(named: NSImage.addTemplateName)
-                    zoomButton.alternateImage = zoomButton.image
-                    zoomButton.imagePosition = .imageOnly
-                    zoomButton.needsDisplay = true
-                }
                 window.delegate = context.coordinator
             }
         }

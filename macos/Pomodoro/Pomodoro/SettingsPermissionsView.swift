@@ -185,6 +185,13 @@ struct SettingsPermissionsView: View {
                     )
                 }
 
+                if subscriptionStore.isServerVerificationPending {
+                    Text("App Store subscription found. Server verification is still required before AI and premium server features unlock.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 if !displayedAIUsageProgressItems.isEmpty {
                     VStack(spacing: 14) {
                         ForEach(displayedAIUsageProgressItems, id: \.title) { item in
@@ -227,7 +234,7 @@ struct SettingsPermissionsView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Text("Restore Purchases")
+                        Text("Restore & Sync Subscription")
                     }
                 }
                 .buttonStyle(.bordered)
@@ -648,7 +655,7 @@ struct PlansComparisonView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Text("Restore Purchases")
+                        Text("Restore & Sync Subscription")
                     }
                 }
                 .buttonStyle(.bordered)

@@ -48,6 +48,49 @@ enum AppCheckRequestAuthorizer {
     }
 }
 
+private enum CloudEndpointResolver {
+    static func explicitURL(for key: String) -> URL? {
+        guard let value = Bundle.main.infoDictionary?[key] as? String,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let url = URL(string: value),
+              isAllowed(url) else {
+            return nil
+        }
+        return url
+    }
+
+    static func functionsURL(path: String, region: String = cloudFunctionsRegion()) -> URL? {
+        guard let projectID = FirebaseApp.app()?.options.projectID,
+              !projectID.isEmpty else {
+            return nil
+        }
+        return URL(string: "https://\(region)-\(projectID).cloudfunctions.net/\(path)")
+    }
+
+    static func cloudFunctionsRegion() -> String {
+        if let configured = Bundle.main.infoDictionary?["POMODORO_CLOUD_FUNCTION_REGION"] as? String,
+           !configured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return configured
+        }
+        return "us-central1"
+    }
+
+    private static func isAllowed(_ url: URL) -> Bool {
+#if DEBUG
+        return true
+#else
+        guard url.scheme?.lowercased() == "https" else {
+            return false
+        }
+        let host = url.host?.lowercased() ?? ""
+        return host != "localhost"
+            && host != "127.0.0.1"
+            && host != "::1"
+            && !host.hasSuffix(".localhost")
+#endif
+    }
+}
+
 final class APIClient {
     enum APIError: LocalizedError {
         case invalidEndpoint
@@ -122,11 +165,10 @@ final class APIClient {
     }
 
     private static var baseURL: URL {
-        if let plistURL = Bundle.main.infoDictionary?["POMODORO_CLOUD_BASE_URL"] as? String,
-           let url = URL(string: plistURL) {
+        if let url = CloudEndpointResolver.explicitURL(for: "POMODORO_CLOUD_BASE_URL") {
             return url
         }
-        return URL(string: "https://api.pomodoroapp.xyz")!
+        return CloudEndpointResolver.functionsURL(path: "")!
     }
 }
 
@@ -171,11 +213,8 @@ final class AccountDeletionAPIClient {
         self.session = session
         if let region {
             self.region = region
-        } else if let configured = Bundle.main.infoDictionary?["POMODORO_CLOUD_FUNCTION_REGION"] as? String,
-                  !configured.isEmpty {
-            self.region = configured
         } else {
-            self.region = "us-central1"
+            self.region = CloudEndpointResolver.cloudFunctionsRegion()
         }
     }
 
@@ -214,15 +253,11 @@ final class AccountDeletionAPIClient {
     }
 
     private func resolveEndpointURL() throws -> URL {
-        if let explicit = Bundle.main.infoDictionary?["POMODORO_DELETE_ACCOUNT_URL"] as? String,
-           let url = URL(string: explicit),
-           !explicit.isEmpty {
+        if let url = CloudEndpointResolver.explicitURL(for: "POMODORO_DELETE_ACCOUNT_URL") {
             return url
         }
 
-        guard let projectID = FirebaseApp.app()?.options.projectID,
-              !projectID.isEmpty,
-              let url = URL(string: "https://\(region)-\(projectID).cloudfunctions.net/deleteAccount") else {
+        guard let url = CloudEndpointResolver.functionsURL(path: "deleteAccount", region: region) else {
             throw AccountDeletionError.invalidEndpoint
         }
 
@@ -359,11 +394,8 @@ final class AIProxyClient {
         self.session = session
         if let region {
             self.region = region
-        } else if let configured = Bundle.main.infoDictionary?["POMODORO_CLOUD_FUNCTION_REGION"] as? String,
-                  !configured.isEmpty {
-            self.region = configured
         } else {
-            self.region = "us-central1"
+            self.region = CloudEndpointResolver.cloudFunctionsRegion()
         }
     }
 
@@ -449,17 +481,11 @@ final class AIProxyClient {
     }
 
     private func resolveEndpointURL() throws -> URL {
-        if let explicit = Bundle.main.infoDictionary?["POMODORO_AI_PROXY_URL"] as? String,
-           let url = URL(string: explicit), !explicit.isEmpty {
+        if let url = CloudEndpointResolver.explicitURL(for: "POMODORO_AI_PROXY_URL") {
             return url
         }
 
-        guard let projectID = FirebaseApp.app()?.options.projectID,
-              !projectID.isEmpty else {
-            throw AIProxyError.invalidEndpoint
-        }
-
-        guard let url = URL(string: "https://\(region)-\(projectID).cloudfunctions.net/aiProxy") else {
+        guard let url = CloudEndpointResolver.functionsURL(path: "aiProxy", region: region) else {
             throw AIProxyError.invalidEndpoint
         }
         return url
@@ -547,11 +573,8 @@ final class EventTasksAPIClient {
         self.session = session
         if let region {
             self.region = region
-        } else if let configured = Bundle.main.infoDictionary?["POMODORO_CLOUD_FUNCTION_REGION"] as? String,
-                  !configured.isEmpty {
-            self.region = configured
         } else {
-            self.region = "us-central1"
+            self.region = CloudEndpointResolver.cloudFunctionsRegion()
         }
     }
 
@@ -651,9 +674,8 @@ final class EventTasksAPIClient {
     }
 
     private func resolveEndpointURL(functionName: String, queryItems: [URLQueryItem] = []) throws -> URL {
-        guard let projectID = FirebaseApp.app()?.options.projectID,
-              !projectID.isEmpty,
-              var components = URLComponents(string: "https://\(region)-\(projectID).cloudfunctions.net/\(functionName)") else {
+        guard let baseURL = CloudEndpointResolver.functionsURL(path: functionName, region: region),
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw EventTasksError.invalidEndpoint
         }
         if !queryItems.isEmpty {
@@ -712,7 +734,9 @@ final class SubscriptionAPIClient {
         let transactionId: String
         let originalTransactionId: String?
         let productId: String?
+        let signedTransactionInfo: String?
         let userId: String?
+        let syncReason: String?
     }
 
     private struct ErrorEnvelope: Decodable {
@@ -734,11 +758,8 @@ final class SubscriptionAPIClient {
         self.session = session
         if let region {
             self.region = region
-        } else if let configured = Bundle.main.infoDictionary?["POMODORO_CLOUD_FUNCTION_REGION"] as? String,
-                  !configured.isEmpty {
-            self.region = configured
         } else {
-            self.region = "us-central1"
+            self.region = CloudEndpointResolver.cloudFunctionsRegion()
         }
     }
 
@@ -746,7 +767,9 @@ final class SubscriptionAPIClient {
         transactionId: String,
         originalTransactionId: String? = nil,
         productId: String? = nil,
-        userId: String? = nil
+        signedTransactionInfo: String? = nil,
+        userId: String? = nil,
+        syncReason: String? = nil
     ) async throws -> SubscriptionEntitlement {
         let token = try await AuthViewModel.shared.getValidIDToken()
         let endpoint = try resolveEndpointURL()
@@ -761,7 +784,9 @@ final class SubscriptionAPIClient {
             transactionId: transactionId,
             originalTransactionId: originalTransactionId,
             productId: productId,
-            userId: userId
+            signedTransactionInfo: signedTransactionInfo,
+            userId: userId,
+            syncReason: syncReason
         ))
 
         let data: Data
@@ -795,15 +820,11 @@ final class SubscriptionAPIClient {
     }
 
     private func resolveEndpointURL() throws -> URL {
-        if let explicit = Bundle.main.infoDictionary?["POMODORO_SUBSCRIPTION_VERIFY_URL"] as? String,
-           let url = URL(string: explicit),
-           !explicit.isEmpty {
+        if let url = CloudEndpointResolver.explicitURL(for: "POMODORO_SUBSCRIPTION_VERIFY_URL") {
             return url
         }
 
-        guard let projectID = FirebaseApp.app()?.options.projectID,
-              !projectID.isEmpty,
-              let url = URL(string: "https://\(region)-\(projectID).cloudfunctions.net/subscriptionVerify") else {
+        guard let url = CloudEndpointResolver.functionsURL(path: "subscriptionVerify", region: region) else {
             throw SubscriptionAPIError.invalidEndpoint
         }
 
@@ -968,7 +989,11 @@ final class SubscriptionStore: ObservableObject {
                 }
                 applyLocalEntitlements(from: [transaction])
                 await transaction.finish()
-                syncBackendInBackground(for: transaction)
+                syncBackendInBackground(
+                    for: transaction,
+                    signedTransactionInfo: verification.jwsRepresentation,
+                    reason: "purchase"
+                )
             case .pending:
                 errorMessage = "Purchase is pending approval."
             case .userCancelled:
@@ -992,10 +1017,10 @@ final class SubscriptionStore: ObservableObject {
             print("[StoreKit] AppStore.sync failed during restore: \((error as NSError).localizedDescription)")
         }
 
-        await syncCurrentEntitlements()
+        await syncCurrentEntitlements(reason: "restore")
     }
 
-    func syncCurrentEntitlements() async {
+    func syncCurrentEntitlements(reason: String = "current_entitlements") async {
         errorMessage = nil
         var activeTransactions: [Transaction] = []
         var backendSyncFailed = false
@@ -1013,9 +1038,14 @@ final class SubscriptionStore: ObservableObject {
                 continue
             }
 
+            let signedTransactionInfo = verification.jwsRepresentation
             activeTransactions.append(transaction)
             do {
-                lastEntitlement = try await syncBackend(for: transaction)
+                lastEntitlement = try await syncBackend(
+                    for: transaction,
+                    signedTransactionInfo: signedTransactionInfo,
+                    reason: reason
+                )
             } catch {
                 backendSyncFailed = true
                 print("[SubscriptionAPI] Backend sync failed for transaction \(transaction.id): \(error.localizedDescription)")
@@ -1024,7 +1054,7 @@ final class SubscriptionStore: ObservableObject {
 
         applyLocalEntitlements(from: activeTransactions)
         if backendSyncFailed && isSubscribed {
-            errorMessage = "Backend sync failed. Your subscription is active on this device."
+            errorMessage = "Server subscription verification failed. AI features unlock after the server verifies your purchase."
         }
         await FeatureGate.shared.refreshAllowance()
     }
@@ -1032,13 +1062,14 @@ final class SubscriptionStore: ObservableObject {
     private func observeTransactionUpdates() async {
         for await verification in Transaction.updates {
             do {
+                let signedTransactionInfo = verification.jwsRepresentation
                 let transaction = try await MainActor.run {
                     try self.verified(verification)
                 }
 
                 guard await MainActor.run(body: { self.isActiveSubscriptionTransaction(transaction) }) else {
                     await transaction.finish()
-                    await syncCurrentEntitlements()
+                    await syncCurrentEntitlements(reason: "transaction_update")
                     continue
                 }
 
@@ -1047,7 +1078,11 @@ final class SubscriptionStore: ObservableObject {
                 }
                 await transaction.finish()
                 await MainActor.run {
-                    self.syncBackendInBackground(for: transaction)
+                    self.syncBackendInBackground(
+                        for: transaction,
+                        signedTransactionInfo: signedTransactionInfo,
+                        reason: "transaction_update"
+                    )
                 }
             } catch {
                 await MainActor.run {
@@ -1217,37 +1252,64 @@ final class SubscriptionStore: ObservableObject {
               let tier = featureTier(for: bestTransaction.productID) else {
             localSubscriptionTier = .free
             localSubscriptionEndAt = nil
+            FeatureGate.shared.clearLocalStoreKitEntitlement()
             return
         }
 
         localSubscriptionTier = tier
         localSubscriptionEndAt = bestTransaction.expirationDate
+        FeatureGate.shared.applyLocalStoreKitEntitlement(
+            tier: tier,
+            subscriptionEndAt: bestTransaction.expirationDate
+        )
     }
 
-    private func syncBackendInBackground(for transaction: Transaction) {
+    private func syncBackendInBackground(
+        for transaction: Transaction,
+        signedTransactionInfo: String?,
+        reason: String
+    ) {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let entitlement = try await self.syncBackend(for: transaction)
+                let entitlement = try await self.syncBackend(
+                    for: transaction,
+                    signedTransactionInfo: signedTransactionInfo,
+                    reason: reason
+                )
                 await MainActor.run {
                     self.lastEntitlement = entitlement
                 }
                 await FeatureGate.shared.refreshAllowance()
+                await MainActor.run {
+                    if self.isSubscribed {
+                        FeatureGate.shared.applyLocalStoreKitEntitlement(
+                            tier: self.localSubscriptionTier,
+                            subscriptionEndAt: self.localSubscriptionEndAt
+                        )
+                    }
+                }
             } catch {
                 await MainActor.run {
-                    self.errorMessage = "Backend sync failed. Your subscription is active on this device."
+                    self.errorMessage = "Server subscription verification failed. AI features unlock after the server verifies your purchase."
                 }
                 print("[SubscriptionAPI] Backend sync failed for transaction \(transaction.id): \(error.localizedDescription)")
             }
         }
     }
 
-    private func syncBackend(for transaction: Transaction) async throws -> SubscriptionEntitlement {
+    private func syncBackend(
+        for transaction: Transaction,
+        signedTransactionInfo: String?,
+        reason: String = "current_entitlements"
+    ) async throws -> SubscriptionEntitlement {
         try await apiClient.verify(
             transactionId: String(transaction.id),
             originalTransactionId: String(transaction.originalID),
             productId: transaction.productID,
-            userId: AuthViewModel.shared.currentUser?.uid
+            signedTransactionInfo: signedTransactionInfo,
+            userId: AuthViewModel.shared.currentUser?.uid,
+            syncReason: reason
         )
     }
 
@@ -1310,16 +1372,24 @@ final class SubscriptionStore: ObservableObject {
     }
 
     var currentProductID: String? {
-        activeProductIDs.sorted {
-            Self.productSortRank(for: $0) > Self.productSortRank(for: $1)
-        }.first ?? lastEntitlement?.effectiveProductId ?? lastEntitlement?.productId
+        guard FeatureGate.shared.tier == .plus || FeatureGate.shared.tier == .pro else {
+            return nil
+        }
+        return lastEntitlement?.effectiveProductId ?? lastEntitlement?.productId
     }
 
     var currentTier: FeatureGate.Tier {
-        if isSubscribed {
-            return localSubscriptionTier
+        FeatureGate.shared.tier
+    }
+
+    var isServerVerificationPending: Bool {
+        guard isSubscribed else { return false }
+        switch FeatureGate.shared.tier {
+        case .plus, .pro, .developer:
+            return false
+        case .free, .beta, .expired:
+            return true
         }
-        return FeatureGate.Tier(rawValue: lastEntitlement?.tier ?? "") ?? .free
     }
 }
 

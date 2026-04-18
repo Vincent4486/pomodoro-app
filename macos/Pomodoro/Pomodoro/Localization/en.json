@@ -50,6 +50,7 @@
   "auth.error.incorrect_password": "Incorrect password",
   "auth.error.invalid_email": "Please enter a valid email.",
   "auth.error.invalid_email_address": "Invalid email address",
+  "auth.error.invalid_email_or_password": "The email or password is incorrect.",
   "auth.error.invalid_password": "Please enter a valid password.",
   "auth.error.missing_firebase_id_token": "Missing Firebase ID token.",
   "auth.error.network": "Network error. Check your connection and try again.",

@@ -36,6 +36,7 @@
 "auth.error.authentication_required" = "Authentication is required.";
 "auth.error.firebase_not_configured" = "Firebase is not configured.";
 "auth.error.invalid_email" = "Please enter a valid email.";
+"auth.error.invalid_email_or_password" = "The email or password is incorrect.";
 "auth.error.invalid_password" = "Please enter a valid password.";
 "auth.error.missing_firebase_id_token" = "Missing Firebase ID token.";
 "auth.error.sign_in_failed" = "Sign in failed.";

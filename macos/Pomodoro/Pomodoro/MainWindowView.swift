@@ -1261,6 +1261,13 @@ struct MainWindowView: View {
                     settingsInfoRow(title: "Subscription Ends", value: formattedSettingsDate(subscriptionEndAt))
                 }
 
+                if subscriptionStore.isServerVerificationPending {
+                    Text("App Store subscription found. Server verification is still required before AI and premium server features unlock.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Button {
                     Task {
                         await subscriptionStore.restorePurchases()
@@ -1270,7 +1277,7 @@ struct MainWindowView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Text("Restore Purchases")
+                        Text("Restore & Sync Subscription")
                     }
                 }
                 .buttonStyle(.bordered)

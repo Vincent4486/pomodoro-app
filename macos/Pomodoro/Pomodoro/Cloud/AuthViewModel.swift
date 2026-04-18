@@ -437,6 +437,8 @@ final class AuthViewModel: ObservableObject {
         switch code {
         case .userNotFound:
             return AuthViewModelError.accountNotFound
+        case .invalidCredential:
+            return AuthViewModelError.invalidEmailOrPassword
         default:
             return mapAuthError(error)
         }
@@ -465,6 +467,8 @@ final class AuthViewModel: ObservableObject {
         switch code {
         case .wrongPassword:
             return AuthViewModelError.incorrectPassword
+        case .invalidCredential:
+            return AuthViewModelError.invalidEmailOrPassword
         case .weakPassword:
             return AuthViewModelError.weakPassword
         case .invalidEmail:
@@ -492,6 +496,7 @@ final class AuthViewModel: ObservableObject {
         case invalidEmail
         case invalidPassword
         case incorrectPassword
+        case invalidEmailOrPassword
         case weakPassword
         case invalidEmailAddress
         case notAuthenticated
@@ -518,6 +523,8 @@ final class AuthViewModel: ObservableObject {
                 return LocalizationManager.shared.text("auth.error.invalid_password")
             case .incorrectPassword:
                 return LocalizationManager.shared.text("auth.error.incorrect_password")
+            case .invalidEmailOrPassword:
+                return LocalizationManager.shared.text("auth.error.invalid_email_or_password")
             case .weakPassword:
                 return LocalizationManager.shared.text("auth.error.weak_password")
             case .invalidEmailAddress:

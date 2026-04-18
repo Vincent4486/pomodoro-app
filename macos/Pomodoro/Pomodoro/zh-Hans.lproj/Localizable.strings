@@ -36,6 +36,7 @@
 "auth.error.authentication_required" = "需要登录认证。";
 "auth.error.firebase_not_configured" = "Firebase 尚未配置。";
 "auth.error.invalid_email" = "请输入有效邮箱。";
+"auth.error.invalid_email_or_password" = "邮箱或密码不正确。";
 "auth.error.invalid_password" = "请输入有效密码。";
 "auth.error.missing_firebase_id_token" = "缺少 Firebase ID Token。";
 "auth.error.sign_in_failed" = "登录失败。";

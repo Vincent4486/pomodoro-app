@@ -115,6 +115,8 @@ final class FeatureGate: ObservableObject {
 
     private var authListener: AuthStateDidChangeListenerHandle?
     private let defaults: UserDefaults
+    private var localStoreKitTier: Tier?
+    private var localStoreKitSubscriptionEndAt: Date?
     private static let cachedEntitlementKey = "feature_gate.cached_entitlement"
 
     private init(defaults: UserDefaults = .standard) {
@@ -219,6 +221,23 @@ final class FeatureGate: ObservableObject {
 
     var canUseAIDeepAnalysis: Bool {
         aiLevel == .deep
+    }
+
+    @MainActor
+    func applyLocalStoreKitEntitlement(tier localTier: Tier, subscriptionEndAt endAt: Date?) {
+        guard Self.isPaidStoreKitTier(localTier) else {
+            clearLocalStoreKitEntitlement()
+            return
+        }
+
+        localStoreKitTier = localTier
+        localStoreKitSubscriptionEndAt = endAt
+    }
+
+    @MainActor
+    func clearLocalStoreKitEntitlement() {
+        localStoreKitTier = nil
+        localStoreKitSubscriptionEndAt = nil
     }
 
     var canUseAIAssistantBreakdown: Bool {
@@ -428,6 +447,7 @@ final class FeatureGate: ObservableObject {
             apply(payload: payload)
         } catch {
             allowanceErrorMessage = error.localizedDescription
+            resetToUnverifiedEntitlementState()
         }
     }
 
@@ -448,6 +468,13 @@ final class FeatureGate: ObservableObject {
 
     @MainActor
     private func resetToSignedOutState() {
+        localStoreKitTier = nil
+        localStoreKitSubscriptionEndAt = nil
+        resetToUnverifiedEntitlementState()
+    }
+
+    @MainActor
+    private func resetToUnverifiedEntitlementState() {
         tier = .free
         deepSeekRemainingTokens = nil
         deepSeekMonthlyLimit = nil
@@ -469,6 +496,7 @@ final class FeatureGate: ObservableObject {
         guard let data = defaults.data(forKey: Self.cachedEntitlementKey) else { return }
         guard let cached = try? JSONDecoder().decode(CachedEntitlement.self, from: data) else { return }
         guard cached.uid == uid else { return }
+        guard cached.tier == .free || cached.tier == .expired else { return }
 
         tier = cached.tier
         subscriptionEndAt = cached.subscriptionEndAt
@@ -479,7 +507,9 @@ final class FeatureGate: ObservableObject {
 
     @MainActor
     private func apply(payload: AllowancePayload) {
-        tier = payload.tier ?? .free
+        let backendTier = payload.tier ?? .free
+
+        tier = backendTier
         deepSeekRemainingTokens = payload.deepSeekRemainingTokens
         deepSeekMonthlyLimit = payload.deepSeekMonthlyLimit
         geminiFlash3RemainingTokens = payload.geminiFlash3RemainingTokens
@@ -487,9 +517,9 @@ final class FeatureGate: ObservableObject {
         allowanceResetAt = payload.resetAt
         dailyAllowanceResetAt = payload.dailyResetAt ?? payload.dailyAIUsage?.resetAt
         subscriptionEndAt = payload.subscriptionEndAt
-        analyticsLevel = payload.analyticsLevel ?? Self.defaultAnalyticsLevel(for: tier)
-        aiLevel = payload.aiLevel ?? Self.defaultAILevel(for: tier)
-        featureFlags = payload.featureFlags ?? Self.defaultFeatures(for: tier)
+        analyticsLevel = payload.analyticsLevel ?? Self.defaultAnalyticsLevel(for: backendTier)
+        aiLevel = payload.aiLevel ?? Self.defaultAILevel(for: backendTier)
+        featureFlags = payload.featureFlags ?? Self.defaultFeatures(for: backendTier)
         dailyAIUsage = payload.dailyAIUsage ?? DailyAIUsageWindow(
             used: nil,
             limit: nil,
@@ -497,7 +527,7 @@ final class FeatureGate: ObservableObject {
             resetAt: dailyAllowanceResetAt
         )
         if FirebaseApp.app() != nil, let uid = Auth.auth().currentUser?.uid {
-            persistCachedEntitlement(uid: uid, tier: tier, subscriptionEndAt: payload.subscriptionEndAt)
+            persistCachedEntitlement(uid: uid, tier: tier, subscriptionEndAt: subscriptionEndAt)
         }
     }
 
@@ -848,6 +878,15 @@ final class FeatureGate: ObservableObject {
                 .proLayout: false,
                 .fullscreenMode: false,
             ]
+        }
+    }
+
+    nonisolated private static func isPaidStoreKitTier(_ tier: Tier) -> Bool {
+        switch tier {
+        case .plus, .pro:
+            return true
+        case .free, .beta, .expired, .developer:
+            return false
         }
     }
 

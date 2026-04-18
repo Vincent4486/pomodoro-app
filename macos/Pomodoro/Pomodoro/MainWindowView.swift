@@ -1364,7 +1364,7 @@ struct MainWindowView: View {
             description: "Open the product policy page in your browser."
         ) {
             Button {
-                guard let url = URL(string: "https://pomodoro-app.tech/policies.html") else {
+                guard let url = URL(string: "https://orchestrana.app/policies.html") else {
                     return
                 }
                 NSWorkspace.shared.open(url)

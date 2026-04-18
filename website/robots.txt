@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://pomodoro-app.tech/sitemap.xml
+Sitemap: https://orchestrana.app/sitemap.xml

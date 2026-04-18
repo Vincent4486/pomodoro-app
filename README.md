@@ -29,7 +29,7 @@ It is not just a timer — it links tasks, time, and focus, adapting to task-dri
 ## 🌐 Our official website
 
 Explore the project website for design philosophies, documentation, and downloads:<br>
-👉  https://pomodoro-app.tech
+👉  https://orchestrana.app
 
 ## Screenshot
 <img width="1027" height="728" alt="Screenshot 2026-01-30 at 4 25 25 PM" src="https://github.com/user-attachments/assets/e04529ad-dacf-4675-bb06-88fdf5a2a7cf" />
@@ -343,12 +343,13 @@ If you encounter issues or have suggestions, feel free to open an issue or pull 
 Official legal and policy documents for the app and website.<br>
 Orchestrana™ is a trademark of Shenzhen Tushengjin Commercial Services Co., Ltd.
 
-[Policies & Legal](https://pomodoro-app.tech/policies.html)
+[Policies & Legal](https://orchestrana.app/policies.html)
 
 ## 📬 Contact
 
-- 📧 Email: support@pomodoro-app.tech  
-- 🌐 Website: https://pomodoro-app.tech  
+- 📧 Support: support@orchestrana.app
+- 📧 General: hello@orchestrana.app
+- 🌐 Website: https://orchestrana.app  
 - 💬 Issues / PRs / Discussions are welcome
 
 We’re happy to hear feedback, bug reports, and feature ideas.

@@ -7,7 +7,7 @@
 
 ## 1. Introduction
 
-Orchestrana™ ("we," "our," or "the Service") provides a macOS productivity application, related cloud-backed functionality, and the website at https://pomodoro-app.tech. These Terms of Service ("Terms") govern your use of the website, the app, and related backend services we operate.
+Orchestrana™ ("we," "our," or "the Service") provides a macOS productivity application, related cloud-backed functionality, and the website at https://orchestrana.app. These Terms of Service ("Terms") govern your use of the website, the app, and related backend services we operate.
 
 By using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 
@@ -263,9 +263,10 @@ These Terms are governed by applicable law. If you are a consumer, mandatory rig
 
 For questions about these Terms:
 
-**Email:** support@pomodoro-app.tech  
+**Support:** support@orchestrana.app  
+**General:** hello@orchestrana.app  
 **GitHub Issues:** https://github.com/T-1234567890/orchestrana-app/issues  
-**Website:** https://pomodoro-app.tech
+**Website:** https://orchestrana.app
 
 ---
 

@@ -14,7 +14,7 @@ Each valid email equals one entry in the giveaway. All participants have equal c
 Your email is strictly used for TestFlight invitations and giveaway contact only. It will not be shared or used for marketing.
 
 👉 Join the waitlist:  
-https://pomodoro-app.tech or https://forms.gle/hQ7ubqxt39sXca4e9
+https://orchestrana.app or https://forms.gle/hQ7ubqxt39sXca4e9
 
 ### 🎯 Giveaway Rules
 

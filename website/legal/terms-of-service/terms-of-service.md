@@ -4,7 +4,7 @@
 
 ## 1. Agreement to These Terms
 
-These Terms of Service ("Terms") govern your use of Orchestrana™ ("Orchestrana," "we," "our," or "the Service"), including the app, website at https://pomodoro-app.tech, subscriptions, cloud-backed features, and related services.
+These Terms of Service ("Terms") govern your use of Orchestrana™ ("Orchestrana," "we," "our," or "the Service"), including the app, website at https://orchestrana.app, subscriptions, cloud-backed features, and related services.
 
 By using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 
@@ -147,5 +147,5 @@ These Terms are governed by applicable law, without regard to conflict-of-law ru
 
 For questions about these Terms, contact:
 
-**Email:** support@pomodoro-app.tech
-
+**Support:** support@orchestrana.app  
+**General:** hello@orchestrana.app

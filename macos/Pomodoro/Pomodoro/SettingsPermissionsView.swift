@@ -129,7 +129,7 @@ struct SettingsPermissionsView: View {
         .cornerRadius(12)
 
         Button {
-            guard let url = URL(string: "https://pomodoro-app.tech/policies.html") else {
+            guard let url = URL(string: "https://orchestrana.app/policies.html") else {
                 return
             }
             NSWorkspace.shared.open(url)
@@ -662,7 +662,7 @@ struct PlansComparisonView: View {
                 .disabled(subscriptionStore.isRestoring)
 
                 Button("View Full Comparison") {
-                    guard let url = URL(string: "https://pomodoro-app.tech/comparison.html") else { return }
+                    guard let url = URL(string: "https://orchestrana.app/comparison.html") else { return }
                     openURL(url)
                 }
                 .buttonStyle(.bordered)

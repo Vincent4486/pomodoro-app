@@ -6,7 +6,7 @@
 
 Orchestrana™ ("Orchestrana," "we," "our," or "the Service") is a productivity app for planning work, focusing in timed sessions, reviewing progress, and using optional AI-assisted features. This Privacy Policy explains what information we collect, how we use it, when we share it, and the choices available to you.
 
-This policy applies to the Orchestrana app, the website at https://pomodoro-app.tech, and related cloud services that support accounts, subscriptions, AI features, and security.
+This policy applies to the Orchestrana app, the website at https://orchestrana.app, and related cloud services that support accounts, subscriptions, AI features, and security.
 
 ## 2. Data We Collect
 
@@ -112,5 +112,5 @@ We may update this Privacy Policy as the Service, legal requirements, App Store 
 
 For privacy questions or data requests, contact:
 
-**Email:** support@pomodoro-app.tech
-
+**Support:** support@orchestrana.app  
+**General:** hello@orchestrana.app
